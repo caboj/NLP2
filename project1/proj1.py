@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 
 class proj1(object):
 
-    def __init__(self,model=1):
-        enC = self.loadData('corpus_1000.en')
-        nlC = self.loadData('corpus_1000.nl')
+    def __init__(self,model=2):
+        #enC = self.loadData('corpus_1000.en')
+        #nlC = self.loadData('corpus_1000.nl')
+        enC = self.loadData('hansards.all.e')
+        nlC = self.loadData('hansards.all.f')
         self.model = model
         # append 'NULL' to english sentences
         # and initialize t(f|e) 
@@ -45,8 +47,9 @@ class proj1(object):
         ltqs = self.IBM(enC,nlC,model)
 
         print(ltqs)
-        plt.plot(ltqs)
-        plt.show()
+        #plt.plot(ltqs)
+        #plt.show()
+        self.maxAligns(loadData('handsards.test.e'),loadData('handsards.test.e'))
     # following Collinls lecture notes p.21 
     def IBM(self, enC, nlC,model,T=5):
         d=1
@@ -66,13 +69,13 @@ class proj1(object):
             self.maximize((enC,nlC))
             # use 4 cpu's to count
             #with Pool(4) as p:
-            #    p.map(self.maximize,[(enC[:250],nlC[:250],1),(enC[251:500],nlC[251:500],1),(enC[501:750],nlC[501:750],1),(enC[751:1000],nlC[751:1000],1)])
+            #    p.map(self.maximize,[(enC[:60000],nlC[:60000]),(enC[60001:120000],nlC[60001:120000]),(enC[120001:180000],nlC[120001:180000]),(enC[180001:],nlC[180001:])])
         
             print('estimating...')
             self.tfe = {(f,e):(self.cef[e,f]/self.ce[e]) for (f,e) in self.tfe}
             self.qjilm = {(j,i,l,m):(self.cjilm[(j,i,l,m)]/self.cilm[(i,l,m)]) for (j,i,l,m) in self.qjilm}
             
-            
+            """
             # determine likelihood
             ltq = self.ltq(enC,nlC)
             ltqs.append(ltq)
@@ -80,7 +83,7 @@ class proj1(object):
             print('-- d: ',d)
             print('-- ltq: ', ltq)
             lastltq = ltq
-    
+            """
         return ltqs
     
     def maximize(self,sents):
@@ -136,7 +139,22 @@ class proj1(object):
                 pf_k += log(pfa_k)
             pf+=pow(e,pf_k)
         return pf
-               
+
+    def maxAligns(self,enC,nlC):
+        f = open('resAligns','w')
+        for k in range(len(enC)):
+            l = len(enC[k])
+            m = len(nlC[k])
+            for i in range(m):
+                cur = 0
+                max = 0
+                for j in range(l-1): # 'NULL' is at the end
+                    cur = self.qjilm[(j+1,i+1,l,m)]*self.tfe[nlC[k][i],enC[k][j]]
+                    if cur > max:
+                        max = cur
+                        align = [j+1,i+1]
+                f.write('%04d %d %d \n'%(k+1,align[0],align[1]))
+        f.close()
               
     
     def loadData(self, fileloc):
