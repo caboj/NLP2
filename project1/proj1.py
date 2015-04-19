@@ -56,7 +56,7 @@ class proj1(object):
         lastltq = -1 
         ltqs = []
         it = 0
-        while d > 0.01:
+        while it < 15: #d > 0.01:
             print('iteration: ', it)
             it += 1
             
