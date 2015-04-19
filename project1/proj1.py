@@ -1,10 +1,11 @@
 import nltk
 from math import log, e, pow
 from multiprocessing import Pool
+import matplotlib.pyplot as plt
 
 class proj1(object):
 
-    def __init__(self,model=2):
+    def __init__(self,model=1):
         enC = self.loadData('corpus_1000.en')
         nlC = self.loadData('corpus_1000.nl')
         self.model = model
@@ -44,13 +45,15 @@ class proj1(object):
         ltqs = self.IBM(enC,nlC,model)
 
         print(ltqs)
+        plt.plot(ltqs)
+        plt.show()
     # following Collinls lecture notes p.21 
     def IBM(self, enC, nlC,model,T=5):
-        d=100
-        lastltq = 0 
+        d=1
+        lastltq = -1 
         ltqs = []
         it = 0
-        while d > 0.000000000001:
+        while d > 0.01:
             print('iteration: ', it)
             it += 1
             
@@ -72,8 +75,8 @@ class proj1(object):
             
             # determine likelihood
             ltq = self.ltq(enC,nlC)
-            ltqs.append((ltq,it))
-            #d =  ltq - lastltq
+            ltqs.append(ltq)
+            d =  ltq - lastltq
             print('-- d: ',d)
             print('-- ltq: ', ltq)
             lastltq = ltq
@@ -134,8 +137,7 @@ class proj1(object):
             pf+=pow(e,pf_k)
         return pf
                
-    
-                
+              
     
     def loadData(self, fileloc):
         toker = nltk.tokenize.RegexpTokenizer(r'((?<=[^\w\s])\w(?=[^\w\s])|(\W))+', gaps=True)
