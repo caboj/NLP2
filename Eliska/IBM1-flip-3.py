@@ -6,8 +6,8 @@ import math
 import nltk
 
 def main():
-	sFileTrain = 'test.e'
-	tFileTrain = 'test.f'
+	sFileTrain = 'test.e' #'hansards.36.2.e'
+	tFileTrain = 'test.f' #'hansards.36.2.f'
 	
 	sFileTest = 'test.e'
 	tFileTest = 'test.f'
@@ -42,6 +42,7 @@ def main():
 	#outputViterbi(sentences, tsTable.cache, 'test.viterbi')
 
 def getSentences(sFile, tFile):
+    print sFile, tFile
     tk = nltk.tokenize.RegexpTokenizer(r'((?<=[^\w\s])\w(?=[^\w\s])|(\W))+', gaps=True)
     srcSens = []
     tarSens = []
@@ -80,19 +81,22 @@ def outputViterbi(sentences, stTable, toFile):
     likelihood = 0
     with open(toFile,'w') as outFile:
          for i, (srcSen, tarSen) in enumerate(sentences):
+            senLL = 0
             for j in range(len(srcSen)):
                 maxVal = 0.0
                 choice = 0
                 for aj in range(len(tarSen)):
                     val = stTable[srcSen[j]][tarSen[aj]]
                     # verkeerde berekening?
-                    likelihood += math.log(val)
+                    senLL += val
                     if val>maxVal:
                         maxVal = val
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
-                	outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
+                	#outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
+                    outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
+            likelihood += math.log(senLL)
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
 
@@ -113,7 +117,7 @@ def collectCounts(sentences, stTable):
         		sTotals[t] += stTable[s][t]
         # Collect counts
         for tWord in tarSen:
-            if sTotals[tWord]== 0:
+            if sTotals[tWord]==0:
             	print tWord 
                	# sWord cannot be aligned to any word in tarSen
                	print 'sTotal is zero??!!'
@@ -146,15 +150,20 @@ def emTraining(sentences, sTest):
     tarCounter = Counter(dict((t,1.0/tarV) for t in tarVoc))
     stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
     print 'stTable created ...'
-	
+
     iteration = 0
-    while iteration<30:
+    maxIter = 30
+    while iteration<maxIter:
         print "Iteration " + str(iteration)
         start = time.time()
         counts = collectCounts(sentences, stTable)
         stTable = translationTable(counts)
         iteration+=1
         outputViterbi(sTest, stTable, 'Output/small_run-flip-3.viterbi.iter'+str(iteration))
+
+	stTableCache = Cache.Cache('stTable.model1.iter'+str(maxIter), [])
+	stTableCache.cache = stTable
+    stTableCache.save()
 
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))
