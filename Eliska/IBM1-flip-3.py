@@ -6,43 +6,42 @@ import math
 import nltk
 
 def main():
-	sFileTrain = 'test.e' #'hansards.36.2.e'
-	tFileTrain = 'test.f' #'hansards.36.2.f'
-	
-	sFileTest = 'test.e'
-	tFileTest = 'test.f'
+    sFileTrain = 'hansards.36.2.e'
+    tFileTrain = 'hansards.36.2.f'
+    
+    sFileTest = 'test.e'
+    tFileTest = 'test.f'
 
-	#sFile = 'corpus_1000.en'
-	#tFile = 'corpus_1000.nl'
+    #sFile = 'corpus_1000.en'
+    #tFile = 'corpus_1000.nl'
 
-	#sFile = 'test.e'
-	#tFile = 'test.f'
+    #sFile = 'test.e'
+    #tFile = 'test.f'
 
-	print "Retrieving sentences and vocabularies..."
-	sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
-	sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
-	sentences = sTrain + sTest
+    print "Retrieving sentences and vocabularies..."
+    sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
+    sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
+    sentences = sTrain + sTest
 
-	print '\tSentences:', str(len(sentences))
-	global srcVoc
-	global tarVoc
-	srcVoc, tarVoc = getVocabularies(sentences, 'small_run-flip-3.e', 'small_run-flip-3.f')
-	
-	# store training vocabulary lengths
-	global srcV
-	srcV = len(srcVoc)
-	print '\tsrcV:', str(srcV)
-	global tarV
-	tarV = len(tarVoc)
-	print '\ttarV:', str(tarV)
+    print '\tSentences:', str(len(sentences))
+    global srcVoc
+    global tarVoc
+    srcVoc, tarVoc = getVocabularies(sentences, 'small_run-flip-3.e', 'small_run-flip-3.f')
+    
+    # store training vocabulary lengths
+    global srcV
+    srcV = len(srcVoc)
+    print '\tsrcV:', str(srcV)
+    global tarV
+    tarV = len(tarVoc)
+    print '\ttarV:', str(tarV)
 
-	emTraining(sentences, sTest)
+    emTraining(sentences, sTest)
 
-	#tsTable = Cache.cache('tsCache', dict())
-	#outputViterbi(sentences, tsTable.cache, 'test.viterbi')
+    #tsTable = Cache.cache('tsCache', dict())
+    #outputViterbi(sentences, tsTable.cache, 'test.viterbi')
 
 def getSentences(sFile, tFile):
-    print sFile, tFile
     tk = nltk.tokenize.RegexpTokenizer(r'((?<=[^\w\s])\w(?=[^\w\s])|(\W))+', gaps=True)
     srcSens = []
     tarSens = []
@@ -57,22 +56,22 @@ def getSentences(sFile, tFile):
     return zip(srcSens, tarSens)
 
 def getVocabularies(sentences, sFile, tFile):
-	start = time.time()
-	srcVoc = Cache.Cache(sFile+'.voc', [])
-	tarVoc = Cache.Cache(tFile+'.voc', [])
-	if not srcVoc.cache or not tarVoc.cache:
-		for sSnt, tSnt in sentences:
-			for s in sSnt:
-				if not s in srcVoc.cache:
-					srcVoc.cache.append(s)
-			for t in tSnt:
-				if not t in tarVoc.cache:
-					tarVoc.cache.append(t)
-			#break
-		srcVoc.save()
-		tarVoc.save()
-	print 'Vocabularies obtained in', getDuration(start, time.time())
-	return srcVoc.cache, tarVoc.cache
+    start = time.time()
+    srcVoc = Cache.Cache(sFile+'.voc', [])
+    tarVoc = Cache.Cache(tFile+'.voc', [])
+    if not srcVoc.cache or not tarVoc.cache:
+        for sSnt, tSnt in sentences:
+            for s in sSnt:
+                if not s in srcVoc.cache:
+                    srcVoc.cache.append(s)
+            for t in tSnt:
+                if not t in tarVoc.cache:
+                    tarVoc.cache.append(t)
+            #break
+        srcVoc.save()
+        tarVoc.save()
+    print 'Vocabularies obtained in', getDuration(start, time.time())
+    return srcVoc.cache, tarVoc.cache
 
 def outputViterbi(sentences, stTable, toFile):
     start = time.time()
@@ -94,7 +93,7 @@ def outputViterbi(sentences, stTable, toFile):
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
-                	#outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
+                    #outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
                     outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
             likelihood += math.pow(math.e,senLL)
     print '\t\t\tLikelihood:', str(likelihood) 
@@ -113,14 +112,14 @@ def collectCounts(sentences, stTable):
         # Compute normalization
         sTotals = Counter()
         for s in srcSen:
-        	for t in tarSen:
-        		sTotals[t] += stTable[s][t]
+            for t in tarSen:
+                sTotals[t] += stTable[s][t]
         # Collect counts
         for tWord in tarSen:
             if sTotals[tWord]==0:
-            	print tWord 
-               	# sWord cannot be aligned to any word in tarSen
-               	print 'sTotal is zero??!!'
+                print tWord 
+                # sWord cannot be aligned to any word in tarSen
+                print 'sTotal is zero??!!'
             else:
                 for sWord in srcSen:
                     value = stTable[sWord][tWord]/sTotals[tWord]
@@ -150,10 +149,9 @@ def emTraining(sentences, sTest):
     tarCounter = Counter(dict((t,1.0/tarV) for t in tarVoc))
     stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
     print 'stTable created ...'
-
+    
     iteration = 0
-    maxIter = 30
-    while iteration<maxIter:
+    while iteration<30:
         print "Iteration " + str(iteration)
         start = time.time()
         counts = collectCounts(sentences, stTable)
@@ -161,9 +159,8 @@ def emTraining(sentences, sTest):
         iteration+=1
         outputViterbi(sTest, stTable, 'Output/small_run-flip-3.viterbi.iter'+str(iteration))
 
-	stTableCache = Cache.Cache('stTable.model1.iter'+str(maxIter), [])
-	stTableCache.cache = stTable
-    stTableCache.save()
+        stCache = Cache.Cache('stTable.iter'+str(iteration), stTable)
+        stCache.save()
 
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))
