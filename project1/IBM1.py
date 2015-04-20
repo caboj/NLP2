@@ -121,7 +121,7 @@ def outputViterbi(sentences, tfe, toFile):
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
-                	outFile.write(str(k+1)+' '+str(i+1)+' '+str(choice)+'\n')
+                	outFile.write('%04d %d %d\n'%(k+1,i+1,choise+1))
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
 

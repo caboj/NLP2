@@ -88,7 +88,7 @@ def outputViterbi(sentences, stTable, toFile):
                 for aj in range(len(tarSen)):
                     val = stTable[srcSen[j]][tarSen[aj]]
                     # verkeerde berekening?
-                    senLL += val
+                    senLL += math.log(val)
                     if val>maxVal:
                         maxVal = val
                         choice = aj
@@ -96,7 +96,7 @@ def outputViterbi(sentences, stTable, toFile):
                 if not choice is 0:
                 	#outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
                     outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
-            likelihood += math.log(senLL)
+            likelihood += math.pow(math.e,senLL)
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
 
