@@ -36,15 +36,15 @@ def main():
 	fV = len(fVoc)
 	print '\tfV:', str(fV)
 
-	emTraining(sentences, Test)
+	emTraining(sentences, test)
 
 	#tsTable = Cache.cache('tsCache', dict())
 	#outputViterbi(sentences, tsTable.cache, 'test.viterbi')
 
-def emTraining(sentences, Test):
+def emTraining(sentences, test):
     print 'Beginning EM training...'
-    eCounter = Counter(dict((t,1.0/eV) for e in eVoc))
-    tfe = dict(zip(fVoc,[Counter for s in eVoc]))
+    eCounter = Counter(dict((e,1.0/eV) for e in eVoc))
+    tfe = dict(zip(fVoc,[eCounter for f in fVoc]))
     print 'tfe created ...'
 	
     iteration = 0
@@ -54,7 +54,7 @@ def emTraining(sentences, Test):
         counts = collectCounts(sentences, tfe)
         tfe = translationTable(counts)
         iteration+=1
-        outputViterbi(Test, tfe, 'Output/small_run-flip-3.viterbi.iter'+str(iteration))
+        outputViterbi(test, tfe, 'Output/small_run-flip-3.viterbi.iter'+str(iteration))
 
 '''
 M-step
@@ -67,10 +67,10 @@ def collectCounts(sentences, tfe):
 
     for eSen, fSen in sentences:
         # Compute normalization
-        fe = Counter()
+        tf = Counter()
         for e in eSen:
-        	for f in fSen:
-        		tf[f] += tfe[f][e]
+                for f in fSen:
+                        tf[f] += tfe[f][e]
         # Collect counts
         for f in fSen:
             if tf[f]== 0:
@@ -92,28 +92,28 @@ def translationTable(counts):
     start = time.time()
     print "\tRecomputing translation table ..."
     tfe = defaultdict(Counter)
-    tf = Counter()
+    ce = Counter()
 
     for e, counter in counts.iteritems():
         ce[e] = sum(counter.values())
         for f, score in counter.iteritems():
             tfe[f][e] = score/ce[e]
     print '\t\tDuration: ' + getDuration(start, time.time())
-    return stTable
+    return tfe
 
 
-def outputViterbi(sentences, stTable, toFile):
+def outputViterbi(sentences, tfe, toFile):
     start = time.time()
     print "\tComputing Viterbi alignments ..."
 
     likelihood = 0
     with open(toFile,'w') as outFile:
-         for i, (srcSen, tarSen) in enumerate(sentences):
-            for j in range(len(srcSen)):
+         for k, (eSen, fSen) in enumerate(sentences):
+            for i in range(len(fSen)):
                 maxVal = 0.0
                 choice = 0
-                for aj in range(len(tarSen)):
-                    val = stTable[srcSen[j]][tarSen[aj]]
+                for aj in range(len(eSen)):
+                    val = tfe[fSen[i]][eSen[aj]]
                     # verkeerde berekening?
                     likelihood += math.log(val)
                     if val>maxVal:
@@ -121,7 +121,7 @@ def outputViterbi(sentences, stTable, toFile):
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
-                	outFile.write(str(i+1)+' '+str(j+1)+' '+str(choice)+'\n')
+                	outFile.write(str(k+1)+' '+str(i+1)+' '+str(choice)+'\n')
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
 
