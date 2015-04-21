@@ -4,19 +4,30 @@ import datetime
 from collections import Counter, defaultdict
 import math
 import nltk
+import argparse
 
 def main():
-    sFileTrain = 'hansards.36.2.e'
-    tFileTrain = 'hansards.36.2.f'
-    #sFileTrain = 'test.e'
-    #tFileTrain = 'test.f'
+    parser = argparse.ArgumentParser(description='Run IBM model 1 or model 2')
+    parser.add_argument('-m', '--model', type=int, help='IBM model', required=True)
+    parser.add_argument('-i', '--iter', default=15, type=int, help='Number of EM iterations', required=False)
+    parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
+    args = vars(parser.parse_args())
+
+    global model
+    model = args['model']
+
+    global runType
+    if args['test']:
+        runType = 'test'
+        sFileTrain = 'test.e'
+        tFileTrain = 'test.f'
+    else:
+        runType = 'full_run'
+        sFileTrain = 'hansards.36.2.e'
+        tFileTrain = 'hansards.36.2.f'
 
     sFileTest = 'test.e'
     tFileTest = 'test.f'
-
-    global runType
-    runType = 'flip'
-    #runType = 'test'
 
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
@@ -26,7 +37,10 @@ def main():
     print '\tSentences:', str(len(sentences))
     global srcVoc
     global tarVoc
-    srcVoc, tarVoc = getVocabularies(sentences, runType+'.f', runType+'.e')
+    srcVoc, tarVoc = getVocabularies(sentences, runType+'.e', runType+'.f')
+
+    # vocabularies do not differ between models
+    runType += '.model'+str(args['model'])
 
     # store training vocabulary lengths
     global srcV
@@ -35,6 +49,9 @@ def main():
     global tarV
     tarV = len(tarVoc)
     print '\ttarV:', str(tarV)
+
+    global iterations
+    iterations = args['iter']
     emTraining(sentences, sTest)
 
 def getSentences(sFile, tFile):
@@ -48,7 +65,6 @@ def getSentences(sFile, tFile):
         for line in tSnt:
             tarSens.append(['NULL']+[word for word in line.split()])
              #if len(tarSens) is 70: break
-    #print srcSens
     return zip(srcSens, tarSens)
 
 def getVocabularies(sentences, sFile, tFile):
@@ -63,7 +79,6 @@ def getVocabularies(sentences, sFile, tFile):
 			for t in tSnt:
 				if not t in tarVoc.cache:
 					tarVoc.cache.append(t)
-			#break
 		srcVoc.save()
 		tarVoc.save()
 	print 'Vocabularies obtained in', getDuration(start, time.time())
@@ -143,31 +158,35 @@ def translationTable(counts):
 
 def emTraining(sentences, sTest):
     print 'Beginning EM training...'
+    globalStart=time.time()
+
     tarCounter = Counter(dict((t,1.0/tarV) for t in tarVoc))
     stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
     print 'stTable created ...'
 	
     likelihoodCache = Cache.Cache(runType+'.likelihood', [])
-    iteration = 0
-    while iteration<30:
-        print "Iteration " + str(iteration)
+    i = 0
+    while i<iterations:
+        print "Iteration " + str(i)
         start = time.time()
-
-        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(iteration), [])
+        
+        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(i), [])
         if not stCache.cache:
             counts = collectCounts(sentences, stTable)
             stTable = translationTable(counts)
             stCache.cache = stTable
-            stCache.save()
+            if (i+1)%5 is 0:
+                stCache.save()
         else:
             stTable = stCache.cache
-
-        viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(iteration)
+        
+        viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
         likelihood = outputViterbi(sTest, stTable, viterbiFile)
         likelihoodCache.cache.append(likelihood)
         likelihoodCache.save()
+        i+=1
 
-        iteration+=1
+    print "EMtraining finished after", iterations, "iterations in", getDuration(globalStart,time.time()),"."
     
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))

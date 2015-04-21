@@ -36,6 +36,7 @@ class Cache(object):
     def save(self):
         if self.saveCache:
             try:
+                print 'Saving cache %s...' % self.file
                 with open(self.file, 'w') as f:
                     f.write(str(self.cache))
             except IOError:
