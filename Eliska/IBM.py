@@ -16,7 +16,7 @@ def main():
     parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
     args = vars(parser.parse_args())
 
-    'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
+    #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
 
     global model
     model = args['model']
