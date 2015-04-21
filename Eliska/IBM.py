@@ -5,16 +5,28 @@ from collections import Counter, defaultdict
 import math
 import nltk
 import argparse
+import random
 
 def main():
     parser = argparse.ArgumentParser(description='Run IBM model 1 or model 2')
     parser.add_argument('-m', '--model', type=int, help='IBM model', required=True)
+    parser.add_argument('-st', '--stInit', default='uniform', type=str, help='Method to initialize translation table', 
+        required=False, choices=['uniform', 'random', 'model1'])
     parser.add_argument('-i', '--iter', default=15, type=int, help='Number of EM iterations', required=False)
     parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
     args = vars(parser.parse_args())
 
+    'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
+
     global model
     model = args['model']
+    
+    global stInit
+    if model is 1 and args['stInit'] == 'model1':
+        print 'Initializing with model 1 only available for model 2. Defaulting to uniform.'
+        stInit = 'uniform'
+    else:
+        stInit = args['stInit']
 
     global runType
     if args['test']:
@@ -60,11 +72,11 @@ def getSentences(sFile, tFile):
     with open(sFile, 'rU') as sSnt:
         for line in sSnt:
             srcSens.append([word for word in line.split()])
-            #if len(srcSens) is 70: break
+            #if len(srcSens) is 2: break
     with open(tFile, 'rU') as tSnt:
         for line in tSnt:
             tarSens.append(['NULL']+[word for word in line.split()])
-             #if len(tarSens) is 70: break
+            #if len(tarSens) is 2: break
     return zip(srcSens, tarSens)
 
 def getVocabularies(sentences, sFile, tFile):
@@ -156,14 +168,42 @@ def translationTable(counts):
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
+def initStTable():
+    global stInit
+    stTable = None
+    start = time.time()
+    print '\tInitializing stTable...'
+
+    if stInit == 'model1':
+        cache = 'stTable.'+runType+'.iter15'
+        stCache = Cache.Cache(cache, [])
+        if not stCache.cache:
+            print 'Initialization cache', cache, 'unavailable. Defaulting to uniform.'
+            stInit = 'uniform'
+        else:
+            stTable = stCache.cache
+
+    if stInit == 'uniform':
+        tarCounter = Counter(dict((t,1.0/tarV) for t in tarVoc))
+        stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
+    
+    if stInit == 'random':
+        tarCounter = []
+        for s in srcVoc:
+            values = {t:random.random() for t in tarVoc}
+            totalValue = sum(values.values())
+            tarCounter.append(Counter(dict((t,values[t]/totalValue) for t in tarVoc)))
+        stTable = dict(zip(srcVoc,tarCounter))
+        
+    print '\tstTable created ...'
+    print '\t\tDuration:', getDuration(start, time.time())
+    return stTable
+
 def emTraining(sentences, sTest):
     print 'Beginning EM training...'
     globalStart=time.time()
 
-    tarCounter = Counter(dict((t,1.0/tarV) for t in tarVoc))
-    stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
-    print 'stTable created ...'
-	
+    stTable = initStTable()
     likelihoodCache = Cache.Cache(runType+'.likelihood', [])
     i = 0
     while i<iterations:
