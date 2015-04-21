@@ -6,14 +6,17 @@ import math
 import nltk
 
 def main():
-    sFileTrain = 'hansards.36.2.f'
-    tFileTrain = 'hansards.36.2.e'
+    sFileTrain = 'hansards.36.2.e'
+    tFileTrain = 'hansards.36.2.f'
+    #sFileTrain = 'test.e'
+    #tFileTrain = 'test.f'
 
-    sFileTest = 'test.f'
-    tFileTest = 'test.e'
+    sFileTest = 'test.e'
+    tFileTest = 'test.f'
 
     global runType
-    runType = 'full_run'
+    runType = 'flip'
+    #runType = 'test'
 
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
@@ -77,19 +80,18 @@ def outputViterbi(sentences, stTable, toFile):
             for j in range(len(srcSen)):
                 maxVal = 0.0
                 choice = 0
+                alLL = 0
                 for aj in range(len(tarSen)):
                     val = stTable[srcSen[j]][tarSen[aj]]
-                    #senLL += math.log(val)
-                    senLL += val
+                    alLL += val
                     if val>maxVal:
                         maxVal = val
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
                 	outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
-            #likelihood += math.pow(math.e,senLL)
-            likelihood += math.log(senLL)/len(sentences)
-    likelihood = math.pow(math.e, likelihood/len(sentences))
+                senLL += math.log(alLL)
+            likelihood += math.log(1e-5) - len(srcSen)*math.log(len(tarSen)+1) + senLL
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
     return likelihood
@@ -150,17 +152,22 @@ def emTraining(sentences, sTest):
     while iteration<30:
         print "Iteration " + str(iteration)
         start = time.time()
-        counts = collectCounts(sentences, stTable)
-        stTable = translationTable(counts)
-        iteration+=1
+
+        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(iteration), [])
+        if not stCache.cache:
+            counts = collectCounts(sentences, stTable)
+            stTable = translationTable(counts)
+            stCache.cache = stTable
+            stCache.save()
+        else:
+            stTable = stCache.cache
 
         viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(iteration)
         likelihood = outputViterbi(sTest, stTable, viterbiFile)
         likelihoodCache.cache.append(likelihood)
+        likelihoodCache.save()
 
-        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(iteration), stTable)
-        stCache.save()
-    likelihoodCache.save()
+        iteration+=1
     
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))
