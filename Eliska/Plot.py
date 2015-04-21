@@ -20,11 +20,13 @@ def readValues(fileName, limit=0):
 
 def plot(values, title):
 	print values
-	plt.plot(values)
+	plt.plot(range(1,len(values)+1), values)
 	plt.title(title)
 	plt.ylabel('Log likelihood')
 	plt.xlabel('Iteration')
 	plt.xticks(range(1, len(values)+1))
+	plt.gca().set_xlim(left=1)
+	plt.gca().set_xlim(right=len(values))
 	plt.show()
 
 if __name__ == '__main__':
