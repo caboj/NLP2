@@ -14,9 +14,10 @@ def main():
         required=False, choices=['uniform', 'random', 'model1'])
     parser.add_argument('-i', '--iter', default=15, type=int, help='Number of EM iterations', required=False)
     parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
+    parser.add_argument('-sm', '--smooth', default=0, nargs=2, type=int, help='Smoothing parameters n and |V|. if |V| is 0 it is determined by the vocabulary present in the data', required=False)
     args = vars(parser.parse_args())
 
-    'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
+    #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
 
     global model
     model = args['model']
@@ -61,6 +62,15 @@ def main():
     global tarV
     tarV = len(tarVoc)
     print '\ttarV:', str(tarV)
+
+    global smooth_n
+    global smooth_v
+    if args['smooth'] == None:
+        smooth_n=0
+        smooth_v=tarV
+    else:
+        smooth_n = args['smooth'][0]
+        smooth_v = args['smooth'][1]
 
     global iterations
     iterations = args['iter']
@@ -221,7 +231,7 @@ def translationTable(counts):
     for sWord, counter in counts.iteritems():
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
-            stTable[sWord][tWord] = score/sTotals[sWord]
+            stTable[sWord][tWord] = (score + smooth_n)/(sTotals[sWord] + smooth_n * smooth_v)
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
