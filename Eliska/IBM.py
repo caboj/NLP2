@@ -31,15 +31,15 @@ def main():
     global runType
     if args['test']:
         runType = 'test'
-        sFileTrain = 'test.e'
-        tFileTrain = 'test.f'
+        sFileTrain = 'test.f'
+        tFileTrain = 'test.e'
     else:
         runType = 'full_run'
-        sFileTrain = 'hansards.36.2.e'
-        tFileTrain = 'hansards.36.2.f'
+        sFileTrain = 'hansards.36.2.f'
+        tFileTrain = 'hansards.36.2.e'
 
-    sFileTest = 'test.e'
-    tFileTest = 'test.f'
+    sFileTest = 'test.f'
+    tFileTest = 'test.e'
 
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
@@ -123,34 +123,67 @@ def outputViterbi(sentences, stTable, toFile):
     print '\t\tDuration:', getDuration(start, time.time())
     return likelihood
 
+def logLikelihood(sentences, stTable, alignProbs):
+    start = time.time()
+    print "\tComputing Viterbi alignments ..."
+
+    ll = 0
+
+    for srcSen,tarSen in sentences:
+        l = len(tarSen)
+        m = len(srcSen)
+        sll = 0
+        for i in range(m):
+            for j in range(l):
+                sll += stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)]
+        ll += math.log(sll)
+    print '\t\t\tLikelihood:', str(ll) 
+    print '\t\tDuration:', getDuration(start, time.time())
+    return ll
 '''
 M-step
 '''
-def collectCounts(sentences, stTable):
+def collectCounts(sentences, stTable,alignProbs={}):
     start = time.time()
     print "\tCollecting counts ..."
 
     counts = defaultdict(Counter)
-
+    if model == 2:
+        alignCj, alignC = initAligns(sentences)
+    
     for srcSen, tarSen in sentences:
         # Compute normalization
         sTotals = Counter()
-        for s in srcSen:
-        	for t in tarSen:
-        		sTotals[t] += stTable[s][t]
+        saTotals = Counter()
+        l = len(tarSen)
+        m = len(srcSen)
+        for i in range(m):
+            for j in range(l):
+                sTotals[tarSen[j]] += stTable[srcSen[i]][tarSen[j]]
+                if model == 2:
+                    saTotals[(i+1,l,m)] += alignProbs[(j+1,i+1,l,m)]*sTotals[tarSen[j]]
         # Collect counts
-        for tWord in tarSen:
-            if sTotals[tWord]==0:
-            	print tWord 
+        for j in range(l):
+            if sTotals[tarSen[j]]==0:
+            	print tarSen[j] 
                	# sWord cannot be aligned to any word in tarSen
                	print 'sTotal is zero??!!'
             else:
-                for sWord in srcSen:
-                    value = stTable[sWord][tWord]/sTotals[tWord]
+                for i in range(m):
+                    if model == 1:
+                        value = stTable[srcSen[i]][tarSen[j]]/sTotals[tarSen[j]]
+                    elif model == 2:
+                        value = (stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)])/saTotals[(i+1,l,m)]
                     if value > 0:
-                        counts[sWord][tWord] += value
+                        counts[srcSen[i]][tarSen[j]] += value
+                        if model == 2:
+                            alignCj[(j+1,i+1,l,m)] += value
+                            alignC[(i+1,l,m)] += value
     print '\t\tDuration: ' + getDuration(start, time.time())
-    return counts
+    if model == 1:
+        return counts
+    elif model == 2:
+        return counts, alignCj, alignC
 
 '''
 E-step
@@ -167,6 +200,16 @@ def translationTable(counts):
             stTable[sWord][tWord] = score/sTotals[sWord]
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
+
+def alignments(alignCj,alignC):
+    start = time.time()
+    print "\tRecomputing alignments ..."
+    alignProbs = {}
+    
+    for (j,i,l,m) in alignCj:
+        alignProbs[(j,i,l,m)] = alignCj[(j,i,l,m)]/alignC[(i,l,m)]
+    print '\t\tDuration: ' + getDuration(start, time.time())
+    return alignProbs
 
 def initStTable():
     global stInit
@@ -199,31 +242,58 @@ def initStTable():
     print '\t\tDuration:', getDuration(start, time.time())
     return stTable
 
+def initAligns(sentences):
+    
+    alignCj = {}
+    alignC = {}
+    for srcSen, tarSen in sentences:
+        l = len(tarSen)
+        m = len(srcSen)
+        for i in range(m):
+            alignC[(i+1,l,m)] = 0
+            for j in range(l):
+                alignCj[(j+1,i+1,l,m)] = 0
+    return alignCj,alignC
+        
 def emTraining(sentences, sTest):
     print 'Beginning EM training...'
     globalStart=time.time()
 
     stTable = initStTable()
+    if model == 2:
+        alignCj, alignC = initAligns(sentences)
+        unifAlignP = (float)(1)/len(alignCj) 
+        alignProbs = {align:unifAlignP for align in alignCj}
+        likelihoods = []
+        
     likelihoodCache = Cache.Cache(runType+'.likelihood', [])
     i = 0
     while i<iterations:
         print "Iteration " + str(i)
         start = time.time()
+
+        if model == 1:
+            stCache = Cache.Cache('stTable.'+runType+'.iter'+str(i), [])
+            if not stCache.cache:
+                counts = collectCounts(sentences, stTable)
+                stTable = translationTable(counts)
+                stCache.cache = stTable
+                if (i+1)%5 is 0:
+                    stCache.save()
+            else:
+                stTable = stCache.cache
+            viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
+            likelihood = outputViterbi(sTest, stTable, viterbiFile)
+            likelihoodCache.cache.append(likelihood)
+            likelihoodCache.save()
         
-        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(i), [])
-        if not stCache.cache:
-            counts = collectCounts(sentences, stTable)
+        elif model == 2:
+            counts, alignCj, alignC = collectCounts(sentences, stTable, alignProbs)
             stTable = translationTable(counts)
-            stCache.cache = stTable
-            if (i+1)%5 is 0:
-                stCache.save()
-        else:
-            stTable = stCache.cache
-        
-        viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
-        likelihood = outputViterbi(sTest, stTable, viterbiFile)
-        likelihoodCache.cache.append(likelihood)
-        likelihoodCache.save()
+            alignProbs = alignments(alignCj,alignC)
+            ll = logLikelihood(sentences,stTable,alignProbs)
+            likelihoods.append(ll)
+            print '\t\tlikelihood M2: ', ll
         i+=1
 
     print "EMtraining finished after", iterations, "iterations in", getDuration(globalStart,time.time()),"."
