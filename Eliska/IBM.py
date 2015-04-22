@@ -32,15 +32,15 @@ def main():
     global runType
     if args['test']:
         runType = 'test'
-        sFileTrain = 'test.f'
-        tFileTrain = 'test.e'
+        sFileTrain = 'test.e'
+        tFileTrain = 'test.f'
     else:
         runType = 'full_run'
-        sFileTrain = 'hansards.36.2.f'
-        tFileTrain = 'hansards.36.2.e'
+        sFileTrain = 'hansards.36.2.e'
+        tFileTrain = 'hansards.36.2.f'
 
-    sFileTest = 'test.f'
-    tFileTest = 'test.e'
+    sFileTest = 'test.e'
+    tFileTest = 'test.f'
 
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
@@ -159,7 +159,7 @@ def writeViterbiAligns(f, sents, stTable, alignP):
     
 def logLikelihood(sentences, stTable, alignProbs):
     start = time.time()
-    print "\tComputing Viterbi alignments ..."
+    print "\tComputing likelihood ..."
 
     ll = 0
 
@@ -169,8 +169,8 @@ def logLikelihood(sentences, stTable, alignProbs):
         sll = 0
         for i in range(m):
             for j in range(l):
-                sll += math.log(stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)])
-        ll += math.log(1e-5) - m*math.log(l+1) + sll
+                sll += stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)]
+        ll += math.log(1e-5) - m*math.log(l+1) + math.log(sll)
     print '\t\t\tLikelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
@@ -325,7 +325,7 @@ def emTraining(sentences, sTest):
             counts, alignCj, alignC = collectCounts(sentences, stTable, alignProbs)
             stTable = translationTable(counts)
             alignProbs = alignments(alignCj,alignC)
-            ll = math.pow(math.e,logLikelihood(sentences,stTable,alignProbs))
+            ll = logLikelihood(sentences,stTable,alignProbs)
             likelihoods.append(ll)
             print '\t\tlikelihood M2: ', ll
         i+=1
