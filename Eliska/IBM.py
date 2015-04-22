@@ -123,6 +123,30 @@ def outputViterbi(sentences, stTable, toFile):
     print '\t\tDuration:', getDuration(start, time.time())
     return likelihood
 
+
+def writeViterbiAligns(f, sents, stTable, alignP):
+    start = time.time()
+    print "\tComputing Viterbi alignments ..."
+
+    with open(f,'w') as outFile:
+         for i, (srcSen, tarSen) in enumerate(sents):
+             l = len(tarSen)
+             m = len(srcSen)
+             for i in range(m):
+                maxVal = 0.0
+                choice = 0
+                for j in range(l):
+                    val = stTable[srcSen[i]][tarSen[j]]*alignP[(j+1,i+1,l,m)]
+                    if val>maxVal:
+                        maxVal = val
+                        choice = j
+                # ommit NULL alignments
+                if not choice is 0:
+                	outFile.write('%04d %d %d\n'%(i+1, i+1, choice))
+                        
+    print '\t\tDuration:', getDuration(start, time.time())
+
+    
 def logLikelihood(sentences, stTable, alignProbs):
     start = time.time()
     print "\tComputing Viterbi alignments ..."
@@ -135,8 +159,8 @@ def logLikelihood(sentences, stTable, alignProbs):
         sll = 0
         for i in range(m):
             for j in range(l):
-                sll += stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)]
-        ll += math.log(sll)
+                sll += math.log(stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)])
+        ll += math.log(1e-5) - m*math.log(l+1) + sll
     print '\t\t\tLikelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
@@ -283,7 +307,7 @@ def emTraining(sentences, sTest):
             else:
                 stTable = stCache.cache
             viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
-            likelihood = outputViterbi(sTest, stTable, viterbiFile)
+            likelihood = math.pow(math.e,(outputViterbi(sTest, stTable, viterbiFile)))
             likelihoodCache.cache.append(likelihood)
             likelihoodCache.save()
         
@@ -291,10 +315,14 @@ def emTraining(sentences, sTest):
             counts, alignCj, alignC = collectCounts(sentences, stTable, alignProbs)
             stTable = translationTable(counts)
             alignProbs = alignments(alignCj,alignC)
-            ll = logLikelihood(sentences,stTable,alignProbs)
+            ll = math.pow(math.e,logLikelihood(sentences,stTable,alignProbs))
             likelihoods.append(ll)
             print '\t\tlikelihood M2: ', ll
         i+=1
+
+    if model == 2:
+        f = 'Output/'+runType+'.viterbi.final' 
+        writeViterbiAligns(f, sTest,stTable, alignProbs)
 
     print "EMtraining finished after", iterations, "iterations in", getDuration(globalStart,time.time()),"."
     
