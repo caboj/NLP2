@@ -1,0 +1,60 @@
+\documentclass[11pt,twocolumn,DIV=11]{scrartcl}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+%\usepackage{setspace}
+%\onehalfspacing
+\usepackage{parskip}
+\usepackage{enumerate}
+\usepackage{graphicx}
+\renewcommand{\bf}[1]{\textbf{#1}}
+\usepackage{natbib}
+\bibliographystyle{apalike}
+
+\title{\small Natural Language Processing 2 - Project 1 Report \LARGE \\ \sc{\bf{IBM Models 1 and 2}} }
+\author{
+    Hartlova, Eliska\\
+    \texttt{@}
+    \and
+    van Rossum, Tim\\
+    \texttt{@}
+    \and
+    Verdegaal, Jacob\\
+    \texttt{jacob.verdegaal@student.uva.nl}
+}
+
+\begin{document}
+
+\maketitle
+
+
+\section{Introduction}
+Contemporary statistical machine translation (SMT) is based on the IBM models \citep{brown}. These models are based on the noisy channel approach, used in speech recognition and introduced by \citeauthor{weaver} for machine translation. It defines the probability of a target sentence $t$ given a source sentence $s$\footnote{We chose to use $t$ for the target language and $s$ as notation for the source language since the original French and English as resp. source and target are switched by some authors. Nowadays it is customary to use English as the source and French as target, but to exclude possibility of confusion we explicitly use target and source. Furthermore, this notation does not `prefer' languages} by:
+\[p(t\mid s) = \frac{p(t)\times p(s\mid t)}{\sum_t(p(s\mid t)}\]
+The IBM models only consider $p(s\mid t)$ and thus so will we in tis paper. Because it is hard to learn these probabilities directly, \citeauthor{brown} introduces a latent alignment variable $a$. This variable defines which word is aligned with which and the distribution is the n defined by: $p(s,a\mid t)$. IBM model 1 only uses this variable as mathematical convenience, model 2 uses it more meaningfull. Model 3,4 and 5 expand further on respectively permutation, phrases and refinement of all the above. But since nowadays all SMT algorithms use at their base IBM model 1 and 2, and vary on approaches therefrom, \texttt{project 1} consideres these.
+In section \ref{models} we will expand on paprameter estimation of the models and some possible inprovements as noted by \citeauthor{moore}. iIn section \ref{experiments} we will describe the experiments we conducted, in section \ref{results} their results. We will conclude our findings in section \ref{conclusion}
+
+\section{IBM models 1 and 2}
+\label{models}
+As descibed above we will consider the probabilty distribution over source sentences $\textbf{s} = s_1s_2\ldots s_m$ given target sentence $\textbf{t}= t_1t_2\ldots t_l$. To effectively optimize this probability distribution to training data the alignment parameter $a$ is introduced as latent variable, such that the likelihood can be defined by:
+\[p(\bf{s}\mid \bf{t}) = \sum_ap(\bf{s},a\mid \bf{t})\]
+Thisparameter $a$ defines pairs:$a(t_i,s_j)\ (\text{ where } i\in l \text{ and } j\in m)$ such that every $t_i$ is aligned with exactly one $s_j$. On top of that, to accomodate `untranslaable words', $\textbf{t}$ is extended with \texttt{NULL}. So for each $j\in m$ we have $a_m=t_i$. From here it follows that:
+\[p(\bf{s},a\mid \bf{t} ) = p(m\mid \bf{t})\prod_{j=1}^mp(a_j\mid a_1^{j-1},f_1^{j-1},m,\bf{t})p(f_j\mid a_1^{j-1},f_1^{j-1},m,\bf{t})\]
+
+\subsection{Model 1}
+
+
+
+\section{Experiments}
+\label{experiments}
+
+\section{Results}
+\label{results}
+
+\section{Conclusion}
+\label{conclusion}
+
+
+\bibliography{bibliography.bib}
+\end{document}
