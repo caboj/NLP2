@@ -106,7 +106,7 @@ def getVocabularies(sentences, sFile, tFile):
 	print 'Vocabularies obtained in', getDuration(start, time.time())
 	return srcVoc.cache, tarVoc.cache
 
-def outputViterbi(sentences, stTable, toFile):
+def outputViterbi(sentences, stTable, toFile, epsilon):
     start = time.time()
     print "\tComputing Viterbi alignments ..."
 
@@ -128,7 +128,8 @@ def outputViterbi(sentences, stTable, toFile):
                 if not choice is 0:
                 	outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
                 senLL += math.log(alLL)
-            likelihood += math.log(1e-5) - len(srcSen)*math.log(len(tarSen)+1) + senLL
+            likelihood += math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + senLL
+            #likelihood += math.log(1e-5) - len(srcSen)*math.log(len(tarSen)+1) + senLL
     print '\t\t\tLikelihood:', str(likelihood) 
     print '\t\tDuration:', getDuration(start, time.time())
     return likelihood
@@ -157,7 +158,7 @@ def writeViterbiAligns(f, sents, stTable, alignP):
     print '\t\tDuration:', getDuration(start, time.time())
 
     
-def logLikelihood(sentences, stTable, alignProbs):
+def logLikelihood(sentences, stTable, alignProbs, epsilon):
     start = time.time()
     print "\tComputing likelihood ..."
 
@@ -170,7 +171,7 @@ def logLikelihood(sentences, stTable, alignProbs):
         for i in range(m):
             for j in range(l):
                 sll += stTable[srcSen[i]][tarSen[j]]*alignProbs[(j+1,i+1,l,m)]
-        ll += math.log(1e-5) - m*math.log(l+1) + math.log(sll)
+        ll += math.log(epsilon)+ math.log(sll)
     print '\t\t\tLikelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
@@ -293,6 +294,25 @@ def emTraining(sentences, sTest):
     print 'Beginning EM training...'
     globalStart=time.time()
 
+    # estimate fixed epsilon
+    pl = defaultdict(Counter)
+    for srcSen, tarSen in sentences:
+        pl[len(srcSen)][len(tarSen)]+=1
+        """
+        if len(tarSen) in pl:
+            if len(srcSen) in pl[len(tarSen)]:
+                pl[len(tarSen)][len(srcSen)] += 1
+            else:
+                pl[len(tarSen)][len(srcSen)] = 1
+        else:
+            pl[len(tarSen)][len(srcSen)] = 1
+        """ 
+    acc = 0
+    for k in pl:
+        acc += 1.0/sum(pl[k])
+    epsilon = acc/len(pl)
+    print epsilon
+    
     stTable = initStTable()
     if model == 2:
         alignCj, alignC = initAligns(sentences)
@@ -317,7 +337,7 @@ def emTraining(sentences, sTest):
             else:
                 stTable = stCache.cache
             viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
-            likelihood = math.pow(math.e,(outputViterbi(sTest, stTable, viterbiFile)))
+            likelihood = math.pow(math.e,(outputViterbi(sTest, stTable, viterbiFile,epsilon)))
             likelihoodCache.cache.append(likelihood)
             likelihoodCache.save()
         
@@ -325,7 +345,7 @@ def emTraining(sentences, sTest):
             counts, alignCj, alignC = collectCounts(sentences, stTable, alignProbs)
             stTable = translationTable(counts)
             alignProbs = alignments(alignCj,alignC)
-            ll = logLikelihood(sentences,stTable,alignProbs)
+            ll = logLikelihood(sentences,stTable,alignProbs, epsilon)
             likelihoods.append(ll)
             print '\t\tlikelihood M2: ', ll
         i+=1
