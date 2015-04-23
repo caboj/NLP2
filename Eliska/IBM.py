@@ -11,10 +11,10 @@ def main():
     parser = argparse.ArgumentParser(description='Run IBM model 1 or model 2')
     parser.add_argument('-m', '--model', type=int, help='IBM model', required=True)
     parser.add_argument('-st', '--stInit', default='uniform', type=str, help='Method to initialize translation table', 
-        required=False, choices=['uniform', 'random', 'model1'])
+        required=False, choices=['uniform', 'random', 'model1', 'heuristic'])
     parser.add_argument('-i', '--iter', default=15, type=int, help='Number of EM iterations', required=False)
     parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
-    parser.add_argument('-sm', '--smooth', default=0, nargs=2, type=int, help='Smoothing parameters n and |V|. if |V| is 0 it is determined by the vocabulary present in the data', required=False)
+    parser.add_argument('-sm', '--smooth', default=[0, 0], nargs=2, type=int, help='Smoothing parameters n and |V|. if |V| is 0 it is determined by the vocabulary present in the data', required=False)
     args = vars(parser.parse_args())
 
     #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
@@ -45,7 +45,7 @@ def main():
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
     sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
-    sentences = sTrain + sTest
+    sentences = sTest#sTrain + sTest
 
     print '\tSentences:', str(len(sentences))
     global srcVoc
@@ -245,7 +245,7 @@ def alignments(alignCj,alignC):
     print '\t\tDuration: ' + getDuration(start, time.time())
     return alignProbs
 
-def initStTable():
+def initStTable(sentences):
     global stInit
     stTable = None
     start = time.time()
@@ -271,7 +271,58 @@ def initStTable():
             totalValue = sum(values.values())
             tarCounter.append(Counter(dict((t,values[t]/totalValue) for t in tarVoc)))
         stTable = dict(zip(srcVoc,tarCounter))
-        
+    
+    if stInit == 'heuristic':
+        st_counts = {s:{t:0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+        s_totals = {s:0 for s in srcVoc}
+        t_totals = {t:0 for t in tarVoc if t != 'NULL'}
+        s_freq = {s:0 for s in srcVoc}
+        t_freq = {s:0 for s in tarVoc}
+        # Count number of sentences any s or t appear in and total appearances of each word.
+        for (src, tar) in sentences:
+            seen = {}
+            for t in tar[1:]:                            
+                t_freq[t] += 1
+                if t not in seen:
+                    t_totals[t] += 1
+                    seen[t] = True
+            seen = {}
+            for s in src:
+                s_freq[s] += 1
+                if s not in seen:
+                    s_totals[s] += 1
+                    seen[s] = True
+                for t in tar[1:]:
+                    st_counts[s][t] += 1
+        stTable = {s:{t:0 for t in tarVoc if t != 'Null'} for s in srcVoc}
+        # Calculate LLR
+        for s in srcVoc:
+            for t in t_totals.keys():
+                st_count = st_counts[s][t]
+                
+                if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):
+                    stTable[s][t] =  st_count * ((st_count / s_totals[s]) / t_totals[t])# + \
+                       (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / (len(sentences)- t_totals[t])) + \
+                       (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / t_totals[t]) + \
+                       (len(sentences) - s_totals[s] - t_totals[t]) / math.log(((len(sentences) - s_totals[s] - t_totals[t]) / (len(sentences) - s_totals[s])) / (len(sentences)- t_totals[t]))
+                else: #Negative correlation
+                    stTable[s][t] = 0
+        #Find max marginal value for s for normalization
+        maxVal = 0
+        for cond_t in stTable.values():
+            if sum(cond_t.values()) > maxVal:
+                maxVal = sum(cond_t.values())
+        # Normalize
+        for cond_t in stTable.values():
+            for t in cond_t.keys():
+                cond_t[t] = cond_t[t] / maxVal
+
+        s_total_sum = sum([len(src_sent[1]) for (src_sent,tar_sent) in sentences])
+
+        for s in s_totals.keys():
+            stTable[s]['NULL'] = s_totals[s] / s_total_sum
+            
+
     print '\tstTable created ...'
     print '\t\tDuration:', getDuration(start, time.time())
     return stTable
@@ -293,7 +344,7 @@ def emTraining(sentences, sTest):
     print 'Beginning EM training...'
     globalStart=time.time()
 
-    stTable = initStTable()
+    stTable = initStTable(sentences)
     if model == 2:
         alignCj, alignC = initAligns(sentences)
         unifAlignP = (float)(1)/len(alignCj) 
