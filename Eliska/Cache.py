@@ -1,4 +1,6 @@
 import os
+import time
+import datetime
 
 class Cache(object):
     def __init__(self, fileName, storageObject):
@@ -37,8 +39,13 @@ class Cache(object):
         if self.saveCache:
             try:
                 print 'Saving cache %s...' % self.file
+                start = time.time()
                 with open(self.file, 'w') as f:
                     f.write(str(self.cache))
+                print '\tDuration:', self.getDuration(start, time.time())
             except IOError:
                 self.saveCache = False
                 print "Failed while writing cache. Cache will no longer be saved..."
+
+    def getDuration(self, start, stop):
+        return str(datetime.timedelta(seconds=(stop-start)))

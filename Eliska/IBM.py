@@ -57,6 +57,8 @@ def main():
 
     # vocabularies do not differ between models and stTable inits
     runType += '.model'+str(args['model'])+'.'+args['stInit']
+    if args['stInit'] is 'random':
+        runType += '1'
 
     # store training vocabulary lengths
     global srcV
@@ -235,9 +237,9 @@ def initStTable():
 
     if stInit == 'model1':
         if test:
-            cache = 'stTable.test.model1.iter15'
+            cache = 'stTable.test.model1.uniform.iter14'
         else:
-            cache = 'stTable.full_run.model1.iter15'
+            cache = 'stTable.full_run.model1.uniform.iter14'
         stCache = Cache.Cache(cache, [])
         if not stCache.cache:
             print 'Initialization cache', cache, 'unavailable. Defaulting to uniform.'
@@ -250,30 +252,9 @@ def initStTable():
         stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
     
     if stInit == 'random':
-        '''
-        stTable = {}
-        tarCounters = []
-        ones = np.ones(tarV)
-        for i, s in enumerate(range(srcV)):
-            if i%10 is 0:
-                print '\t\ti:', i
-            #tarCounters.append(Counter(dict(zip(tarVoc,np.random.dirichlet(ones,size=1)[0]))))
-            stTable[s] = Counter(dict(zip(tarVoc,np.random.dirichlet(ones,size=1)[0])))
-        #stTable = dict(zip(srcVoc, tarCounters))
-        '''
-        #stTable = dict(zip(srcVoc, 
-        #    [Counter(dict(zip(tarVoc,np.random.dirichlet(np.ones(tarV),size=1)[0]))) for s in range(srcV)]))
-        
-        stTable = {}
-        tOnes = np.ones(tarV)
-        for s in xrange(srcV):
-            if s%10 is 0:
-                print '\t\t'+str(s)
-            values = np.random.dirichlet(tOnes,size=1)[0]
-            #stTable[srcVoc[s]] = Counter(dict(zip(tarVoc,values)))
-            stTable[srcVoc[s]] = Counter(dict((tarVoc[t],values[t]) for t in xrange(tarV)))
-        stCache = Cache.Cache('stTable.random.full_run.v1', stTable)
-        stCache.save()
+        values = zip(tarVoc, np.random.dirichlet(np.ones(tarV),size=1)[0])
+        tarCounter = Counter(dict(values))
+        stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
 
     print '\tstTable created ...'
     print '\t\tDuration:', getDuration(start, time.time())
@@ -288,9 +269,9 @@ def initAligns(sentences):
         l = len(tarSen)
         m = len(srcSen)
         for j in xrange(m):
-            alignC[(j+1,l,m)] = 0
+            alignC[(j+1,l,m)] = 0.0
             for aj in xrange(l):
-                alignCj[(aj+1,j+1,l,m)] = 0
+                alignCj[(aj+1,j+1,l,m)] = 0.0
     print '\t\t\tDuration:', getDuration(start, time.time())
     return alignCj, alignC
         
@@ -345,7 +326,7 @@ def emTraining(sentences, sTest):
                 stTable = translationTable(counts)
                 alignProbs = alignments(alignCj, alignC)
             stCache.cache = stTable
-            if (i+1)%5 is 0:
+            if i is 0 or (i+1)%5 is 0:
                 stCache.save()
         #else:
         #    stTable = stCache.cache
