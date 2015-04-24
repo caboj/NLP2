@@ -19,7 +19,7 @@ def main():
         help='Smoothing parameters n and |V|. If |V| is 0 it is determined by the vocabulary present in the data')
     parser.add_argument('-a', '--alpha', default=None, type=float, required=False, 
         help='Alpha parameter for Variational Bayes.')
-    parser.add_argument('-nulls', '--null_words', default=1, type=int, required=False, 
+    parser.add_argument('-nulls', '--nullWords', default=1, type=int, required=False, 
         help='Number of null words added to target sentence')
     args = vars(parser.parse_args())
 
@@ -37,8 +37,8 @@ def main():
     else:
         stInit = args['stInit']
 
-    global null_n
-    null_n = args['null_words']
+    global nullN
+    nullN = args['nullWords']
 
     global runType
     if args['test']:
@@ -56,7 +56,7 @@ def main():
     print "Retrieving sentences and vocabularies..."
     sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
     sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
-    sentences = sTrain #+ sTest
+    sentences = sTrain + sTest
 
     print '\tSentences:', str(len(sentences))
     global srcVoc
@@ -109,21 +109,21 @@ def getSentences(sFile, tFile):
     return zip(srcSens, tarSens)
 
 def getVocabularies(sentences, sFile, tFile):
-	start = time.time()
-	srcVoc = Cache.Cache(sFile+'.voc', [])
-	tarVoc = Cache.Cache(tFile+'.voc', [])
-	if not srcVoc.cache or not tarVoc.cache:
-		for sSnt, tSnt in sentences:
-			for s in sSnt:
-				if not s in srcVoc.cache:
-					srcVoc.cache.append(s)
-			for t in tSnt:
-				if not t in tarVoc.cache:
-					tarVoc.cache.append(t)
-		srcVoc.save()
-		tarVoc.save()
-	print 'Vocabularies obtained in', getDuration(start, time.time())
-	return srcVoc.cache, tarVoc.cache
+    start = time.time()
+    srcVoc = Cache.Cache(sFile+'.voc', [])
+    tarVoc = Cache.Cache(tFile+'.voc', [])
+    if not srcVoc.cache or not tarVoc.cache:
+        for sSnt, tSnt in sentences:
+            for s in sSnt:
+                if not s in srcVoc.cache:
+                    srcVoc.cache.append(s)
+            for t in tSnt:
+                if not t in tarVoc.cache:
+                    tarVoc.cache.append(t)
+        srcVoc.save()
+        tarVoc.save()
+    print 'Vocabularies obtained in', getDuration(start, time.time())
+    return srcVoc.cache, tarVoc.cache
 
 def outputViterbi(sentences, stTable, toFile, alignP=None):
     start = time.time()
@@ -146,7 +146,7 @@ def outputViterbi(sentences, stTable, toFile, alignP=None):
                         choice = aj
                 # ommit NULL alignments
                 if not choice is 0:
-                	outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
+                    outFile.write('%04d %d %d\n'%(i+1, j+1, choice))
     print '\t\tDuration:', getDuration(start, time.time())
     
 def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
@@ -198,9 +198,9 @@ def collectCounts(sentences, stTable, alignProbs=None):
         # Collect counts
         for aj in xrange(l):
             if model is 1 and sTotals[tarSen[aj]] is 0:
-            	print tarSen[aj] 
-               	# sWord cannot be aligned to any word in tarSen
-               	print 'sTotal is zero??!!'
+                print tarSen[aj] 
+                # sWord cannot be aligned to any word in tarSen
+                print 'sTotal is zero??!!'
             else:
                 for j in xrange(m):
                     if model is 1:
@@ -232,9 +232,9 @@ def translationTable(counts):
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
             if not alpha is None:
-                stTable[sWord][tWord] = null_n * math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
+                stTable[sWord][tWord] = nullN * math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
             else:
-                stTable[sWord][tWord] = null_n * (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+                stTable[sWord][tWord] = nullN * (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
@@ -259,7 +259,7 @@ def initStTable(sentences):
         if test:
             cache = 'stTable.test.model1.uniform.iter14'
         else:
-            cache = 'stTable.full_run.model1.uniform.iter14'
+            cache = 'stTable.10000.model1.uniform.iter14'
         stCache = Cache.Cache(cache, [], True)
         if not stCache.cache:
             print 'Initialization cache', cache, 'unavailable. Defaulting to uniform.'
@@ -277,14 +277,59 @@ def initStTable(sentences):
         stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
 
     if stInit == 'heuristic':
-
-        # Calculate LLR 
-        stTable = calculateLLr(sentences)
+        st_counts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+        s_totals = {s:0.0 for s in srcVoc}
+        t_totals = {t:0.0 for t in tarVoc if t != 'NULL'}
+        s_freq = {s:0.0 for s in srcVoc}
+        t_freq = {t:0.0 for t in tarVoc}
+        # Count number of sentences any s or t appear in and total appearances of each word.
+        for (src, tar) in sentences:
+            seen = {}
+            for t in tar[1:]:                            
+                t_freq[t] += 1
+                if t not in seen:
+                    t_totals[t] += 1
+                    seen[t] = True
+            seen = {}
+            for s in src:
+                s_freq[s] += 1
+                t_seen = {}
+                if s not in seen:
+                    s_totals[s] += 1
+                    seen[s] = True
+                for t in tar[1:]:
+                    if t not in t_seen:
+                        st_counts[s][t] += 1
+                        t_seen[t] = True
+        stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+        # Calculate LLR
+        for s in srcVoc:
+            for t in t_totals.keys():
+                st_count = st_counts[s][t]
+                
+                if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):                    
+                    stTable[s][t] =  st_count * math.log((st_count / s_totals[s]) / (t_totals[t] / len(sentences))) # s and t
+                    try:
+                        stTable[s][t] += (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / ((len(sentences)- t_totals[t]) /len(sentences))) # s and not t
+                    except ValueError:
+                        continue
+                    try: 
+                        stTable[s][t] += (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / (t_totals[t] / len(sentences))) # t and not s
+                    except ValueError:
+                        continue
+                    try: 
+                        stTable[s][t] += (len(sentences) - s_totals[s] - t_totals[t] + st_count) * \
+                            math.log(((len(sentences) - s_totals[s] - t_totals[t] + st_count) / (len(sentences) - s_totals[s])) / ((len(sentences)- t_totals[t])/len(sentences)))# not s and not t
+                    except ValueError:
+                        continue
+                else: #Negative correlation
+                    stTable[s][t] = 0.0
         #Find max marginal value for s for normalization
         maxVal = 0.0
         for cond_t in stTable.values():
             if sum(cond_t.values()) > maxVal:
-                maxVal = sum(cond_t.values())        
+                maxVal = sum(cond_t.values())
+        
         # Normalize
         for cond_t in stTable.values():
             for t in cond_t.keys():
@@ -293,7 +338,7 @@ def initStTable(sentences):
         s_total_sum = sum([len(src_sent) for (src_sent,tar_sent) in sentences])
 
         for s in stTable.keys():
-            stTable[s]['NULL'] = null_n * (sum(stTable[s].values()) / s_total_sum)
+            stTable[s]['NULL'] = null_n * (s_totals[s] / s_total_sum)
             stTable[s] = Counter(stTable[s])
 
     print '\tstTable created ...'
@@ -374,61 +419,6 @@ def emTraining(sentences, sTest):
     
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))
-
-def calculateLLr(sentences):
-    st_counts, s_totals, t_totals, s_freq, t_freq = _countOccurrences(sentences)
-
-    stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
-    # Calculate LLR
-    for s in srcVoc:
-        for t in t_totals.keys():
-            st_count = st_counts[s][t]
-            
-            if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):                    
-                stTable[s][t] =  st_count * math.log((st_count / s_totals[s]) / (t_totals[t] / len(sentences))) # s and t
-                try:
-                    stTable[s][t] += (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / ((len(sentences)- t_totals[t]) /len(sentences))) # s and not t
-                except ValueError:
-                    continue
-                try: 
-                    stTable[s][t] += (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / (t_totals[t] / len(sentences))) # t and not s
-                except ValueError:
-                    continue
-                try: 
-                    stTable[s][t] += (len(sentences) - s_totals[s] - t_totals[t] + st_count) * \
-                        math.log(((len(sentences) - s_totals[s] - t_totals[t] + st_count) / (len(sentences) - s_totals[s])) / ((len(sentences)- t_totals[t])/len(sentences)))# not s and not t
-                except ValueError:
-                    continue
-            else: #Negative correlation
-                stTable[s][t] = 0.0
-    return stTable
-
-def _countOccurrences(sentences):
-    st_counts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
-    s_totals = {s:0.0 for s in srcVoc}
-    t_totals = {t:0.0 for t in tarVoc if t != 'NULL'}
-    s_freq = {s:0.0 for s in srcVoc}
-    t_freq = {t:0.0 for t in tarVoc}
-    # Count number of sentences any s or t appear in and total appearances of each word.
-    for (src, tar) in sentences:
-        seen = {}
-        for t in tar[1:]:                            
-            t_freq[t] += 1
-            if t not in seen:
-                t_totals[t] += 1
-                seen[t] = True
-        seen = {}
-        for s in src:
-            s_freq[s] += 1
-            t_seen = {}
-            if s not in seen:
-                s_totals[s] += 1
-                seen[s] = True
-            for t in tar[1:]:
-                if t not in t_seen:
-                    st_counts[s][t] += 1
-                    t_seen[t] = True
-    return st_counts, s_totals, t_totals, s_freq, t_freq
 
 if __name__ == '__main__':
     main()
