@@ -365,8 +365,8 @@ def estimateEpsilon(sentences):
     for k in pl:
         acc += sum(pl[k])
     """
-    epsilon = 1/len(pl)
-    #print epsilon
+    epsilon = 1.0/len(pl)
+    print epsilon
     return epsilon
 
 def emTraining(sentences, sTest):
