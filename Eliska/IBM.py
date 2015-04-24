@@ -360,19 +360,12 @@ def estimateEpsilon(sentences):
     pl = defaultdict(Counter)
     for srcSen, tarSen in sentences:
         pl[len(srcSen)][len(tarSen)]+=1
-        """
-        if len(tarSen) in pl:
-            if len(srcSen) in pl[len(tarSen)]:
-                pl[len(tarSen)][len(srcSen)] += 1
-            else:
-                pl[len(tarSen)][len(srcSen)] = 1
-        else:
-            pl[len(tarSen)][len(srcSen)] = 1
-        """ 
+    """   
     acc = 0
     for k in pl:
-        acc += 1.0/sum(pl[k])
-    epsilon = acc/len(pl)
+        acc += sum(pl[k])
+    """
+    epsilon = 1/len(pl)
     #print epsilon
     return epsilon
 
