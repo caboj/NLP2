@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from scipy.special import digamma
 import numpy as np
 import Cache
 import time
@@ -15,7 +16,9 @@ def main():
     parser.add_argument('-i', '--iter', default=15, type=int, help='Number of EM iterations', required=False)
     parser.add_argument('-t', '--test', default=False, type=bool, help='Test run (small set)', required=False)
     parser.add_argument('-sm', '--smooth', default=None, nargs=2, type=int, required=False,
-        help='Smoothing parameters n and |V|. If |V| is 0 it is determined by the vocabulary present in the data',)
+        help='Smoothing parameters n and |V|. If |V| is 0 it is determined by the vocabulary present in the data')
+    parser.add_argument('-a', '--alpha', default=None, type=float, required=False, 
+        help='Alpha parameter for Variational Bayes.')
     args = vars(parser.parse_args())
 
     #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
@@ -55,7 +58,7 @@ def main():
     global tarVoc
     srcVoc, tarVoc = getVocabularies(sentences, runType+'.e', runType+'.f')
 
-    # vocabularies do not differ between models and stTable inits
+    # vocabularies only differ between test runs and full runs
     runType += '.model'+str(args['model'])+'.'+args['stInit']
     if args['stInit'] is 'random':
         runType += '1'
@@ -73,6 +76,15 @@ def main():
         smooth = {'n':0, 'v':tarV}
     else:
         smooth = {'n':args['smooth'][0], 'v':args['smooth'][1]}
+        runType += '.n'+str(smooth['n'])+'.v'+str(smooth['v'])
+
+    global alpha
+    if not args['alpha'] == None:
+        alpha = args['alpha']
+        runType += '.alpha'+str(alpha)
+        print runType
+    else:
+        alpha = None
 
     global iterations
     iterations = args['iter']
@@ -214,7 +226,10 @@ def translationTable(counts):
     for sWord, counter in counts.iteritems():
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
-            stTable[sWord][tWord] = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+            if not alpha is None:
+                stTable[sWord][tWord] = math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
+            else:
+                stTable[sWord][tWord] = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
@@ -240,7 +255,7 @@ def initStTable(sentences):
             cache = 'stTable.test.model1.uniform.iter14'
         else:
             cache = 'stTable.full_run.model1.uniform.iter14'
-        stCache = Cache.Cache(cache, [])
+        stCache = Cache.Cache(cache, [], True)
         if not stCache.cache:
             print 'Initialization cache', cache, 'unavailable. Defaulting to uniform.'
             stInit = 'uniform'
@@ -381,7 +396,7 @@ def emTraining(sentences, sTest):
         print "Iteration " + str(i)
         start = time.time()
 
-        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(i), [])
+        stCache = Cache.Cache('stTable.'+runType+'.iter'+str(i), [], True)
         if not stCache.cache:
             if model is 1:
                 counts = collectCounts(sentences, stTable)
