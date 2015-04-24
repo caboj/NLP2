@@ -19,6 +19,8 @@ def main():
         help='Smoothing parameters n and |V|. If |V| is 0 it is determined by the vocabulary present in the data')
     parser.add_argument('-a', '--alpha', default=None, type=float, required=False, 
         help='Alpha parameter for Variational Bayes.')
+    parser.add_argument('-nulls', '--null_words', default=1, type=int, required=False, 
+        help='Number of null words added to target sentence')
     args = vars(parser.parse_args())
 
     #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
@@ -34,6 +36,9 @@ def main():
         stInit = 'uniform'
     else:
         stInit = args['stInit']
+
+    global null_n
+    null_n = args['null_words']
 
     global runType
     if args['test']:
@@ -227,9 +232,9 @@ def translationTable(counts):
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
             if not alpha is None:
-                stTable[sWord][tWord] = math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
+                stTable[sWord][tWord] = null_n * math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
             else:
-                stTable[sWord][tWord] = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+                stTable[sWord][tWord] = null_n * (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
@@ -333,7 +338,7 @@ def initStTable(sentences):
         s_total_sum = sum([len(src_sent) for (src_sent,tar_sent) in sentences])
 
         for s in stTable.keys():
-            stTable[s]['NULL'] = s_totals[s] / s_total_sum
+            stTable[s]['NULL'] = null_n * (s_totals[s] / s_total_sum)
             stTable[s] = Counter(stTable[s])
 
     print '\tstTable created ...'
