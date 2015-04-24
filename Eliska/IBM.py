@@ -297,37 +297,36 @@ def initStTable(sentences):
                     if t not in t_seen:
                         st_counts[s][t] += 1
                         t_seen[t] = True
-        stTable = {s:{t:0.0 for t in tarVoc if t != 'Null'} for s in srcVoc}
+        stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
         # Calculate LLR
         for s in srcVoc:
             for t in t_totals.keys():
                 st_count = st_counts[s][t]
                 
-                if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):
+                if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):                    
+                    stTable[s][t] =  st_count * math.log((st_count / s_totals[s]) / (t_totals[t] / len(sentences))) # s and t
                     try:
-                        stTable[s][t] =  st_count * math.log((st_count / s_totals[s]) / t_totals[t])
+                        stTable[s][t] += (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / ((len(sentences)- t_totals[t]) /len(sentences))) # s and not t
                     except ValueError:
                         continue
-                    try:
-                        stTable[s][t] += (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / (len(sentences)- t_totals[t]))
+                    try: 
+                        stTable[s][t] += (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / (t_totals[t] / len(sentences))) # t and not s
                     except ValueError:
                         continue
-                    try:
-                        stTable[s][t] += (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / t_totals[t])
+                    try: 
+                        stTable[s][t] += (len(sentences) - s_totals[s] - t_totals[t] + st_count) * \
+                            math.log(((len(sentences) - s_totals[s] - t_totals[t] + st_count) / (len(sentences) - s_totals[s])) / ((len(sentences)- t_totals[t])/len(sentences)))
+                        # not s and not t
                     except ValueError:
                         continue
-                    try:
-                        stTable[s][t] += (len(sentences) - s_totals[s] - t_totals[t]) * math.log(((len(sentences) - s_totals[s] - t_totals[t]) / (len(sentences) - s_totals[s])) / (len(sentences)- t_totals[t]))
-                    except ValueError:
-                        continue
-                    if stTable[s][t] < 0 and st_count != 0:
+                    if stTable[s][t] == 0 and st_count != 0:
                         print '0-value ', stTable[s][t], ' ', st_count, ' ', s_totals[s], ' ', t_totals[t]
                         print st_count * ((st_count / s_totals[s]) / t_totals[t])
                         print (s_totals[s] - st_count) * (((s_totals[s] - st_count) / s_totals[s]) / (len(sentences)- t_totals[t]))
                         print (t_totals[t] - st_count) * (((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / t_totals[t])
                         print (len(sentences) - s_totals[s] - t_totals[t]) * (((len(sentences) - s_totals[s] - t_totals[t]) / (len(sentences) - s_totals[s])) / (len(sentences)- t_totals[t]))
                 else: #Negative correlation
-                    stTable[s][t] = 0
+                    stTable[s][t] = 0.0
         #Find max marginal value for s for normalization
         maxVal = 0.0
         for cond_t in stTable.values():
@@ -339,10 +338,12 @@ def initStTable(sentences):
             for t in cond_t.keys():
                 cond_t[t] = cond_t[t] / maxVal
 
+
         s_total_sum = sum([len(src_sent) for (src_sent,tar_sent) in sentences])
 
         for s in stTable.keys():
             stTable[s]['NULL'] = s_totals[s] / s_total_sum
+            stTable[s] = Counter(stTable[s])
             
 
     print '\tstTable created ...'
