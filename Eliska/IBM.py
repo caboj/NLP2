@@ -46,9 +46,9 @@ def main():
         sFileTrain = 'test.e'
         tFileTrain = 'test.f'
     else:
-        runType = 'full_run'
-        sFileTrain = 'hansards.36.2.e'
-        tFileTrain = 'hansards.36.2.f'
+        runType = '10000'
+        sFileTrain = 'hansards.36.2.e.10000'
+        tFileTrain = 'hansards.36.2.f.10000'
 
     sFileTest = 'test.e'
     tFileTest = 'test.f'
