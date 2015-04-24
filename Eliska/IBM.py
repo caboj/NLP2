@@ -1,9 +1,9 @@
 from collections import Counter, defaultdict
+import numpy as np
 import Cache
 import time
 import datetime
 import math
-import nltk
 import argparse
 import random
 
@@ -55,8 +55,8 @@ def main():
     global tarVoc
     srcVoc, tarVoc = getVocabularies(sentences, runType+'.e', runType+'.f')
 
-    # vocabularies do not differ between models
-    runType += '.model'+str(args['model'])
+    # vocabularies do not differ between models and stTable inits
+    runType += '.model'+str(args['model'])+'.'+args['stInit']
 
     # store training vocabulary lengths
     global srcV
@@ -114,10 +114,10 @@ def outputViterbi(sentences, stTable, toFile, alignP=None):
          for i, (srcSen, tarSen) in enumerate(sentences):
             m = len(srcSen)
             l = len(tarSen)
-            for j in range(m):
+            for j in xrange(m):
                 maxVal = 0.0
                 choice = 0
-                for aj in range(l):
+                for aj in xrange(l):
                     if model is 1:
                         val = stTable[srcSen[j]][tarSen[aj]]
                     else:
@@ -131,24 +131,24 @@ def outputViterbi(sentences, stTable, toFile, alignP=None):
     print '\t\tDuration:', getDuration(start, time.time())
     
 def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
-    print "\tComputing likelihood ..."
+    print "\tComputing log likelihood ..."
     start = time.time()
     ll = 0
     for srcSen,tarSen in sentences:
         l = len(tarSen)
         m = len(srcSen)
         senLL = 0
-        for j in range(m):
-            for aj in range(l):
+        for j in xrange(m):
+            for aj in xrange(l):
                 if model is 1:
                     senLL += stTable[srcSen[j]][tarSen[aj]]
                 else:
                     senLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
         if model is 1:
-            ll = math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + math.log(senLL)
+            ll += math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + math.log(senLL)
         else:
             ll += math.log(epsilon) + math.log(senLL)
-    print '\t\t\tLikelihood:', str(ll) 
+    print '\t\t\tLog likelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
 
@@ -169,19 +169,21 @@ def collectCounts(sentences, stTable, alignProbs=None):
         saTotals = Counter()
         l = len(tarSen)
         m = len(srcSen)
-        for j in range(m):
-            for aj in range(l):
-                sTotals[tarSen[aj]] += stTable[srcSen[j]][tarSen[aj]]
-                if model is 2:
-                    saTotals[(j+1,l,m)] += alignProbs[(aj+1,j+1,l,m)]*sTotals[tarSen[aj]]
+        for j in xrange(m):
+            for aj in xrange(l):
+                if model is 1:
+                    sTotals[tarSen[aj]] += stTable[srcSen[j]][tarSen[aj]]
+                else:
+                    #saTotals[(j+1,l,m)] += alignProbs[(aj+1,j+1,l,m)]*sTotals[tarSen[aj]]
+                    saTotals[(j+1,l,m)] += alignProbs[(aj+1,j+1,l,m)]*stTable[srcSen[j]][tarSen[aj]]
         # Collect counts
-        for aj in range(l):
-            if sTotals[tarSen[aj]] is 0:
+        for aj in xrange(l):
+            if model is 1 and sTotals[tarSen[aj]] is 0:
             	print tarSen[aj] 
                	# sWord cannot be aligned to any word in tarSen
                	print 'sTotal is zero??!!'
             else:
-                for j in range(m):
+                for j in xrange(m):
                     if model is 1:
                         value = stTable[srcSen[j]][tarSen[aj]]/sTotals[tarSen[aj]]
                     else:
@@ -210,17 +212,18 @@ def translationTable(counts):
     for sWord, counter in counts.iteritems():
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
-            stTable[sWord][tWord] = (score + smooth['n'])/(sTotals[sWord] + smooth['n'] * smooth['v'])
+            stTable[sWord][tWord] = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
 def alignments(alignCj, alignC):
     start = time.time()
     print "\tRecomputing alignments ..."
-    alignProbs = {}
-    
-    for (j,i,l,m) in alignCj:
-        alignProbs[(j, i, l, m)] = alignCj[(j, i, l, m)]/alignC[(i, l, m)]
+    #alignProbs = {}
+
+    #for (aj,j,l,m) in alignCj:
+    #    alignProbs[(aj,j,l,m)] = alignCj[(aj,j,l,m)]/alignC[(j,l,m)]
+    alignProbs = {(aj,j,l,m):alignCj[(aj,j,l,m)]/alignC[(j,l,m)] for (aj,j,l,m) in alignCj}
     print '\t\tDuration: ' + getDuration(start, time.time())
     return alignProbs
 
@@ -247,30 +250,48 @@ def initStTable():
         stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
     
     if stInit == 'random':
-        tarCounter = []
-        for s in srcVoc:
-            #values = {t:random.random() for t in tarVoc}
-            #totalValue = sum(values.values())
-            #tarCounter.append(Counter(dict((t,values[t]/totalValue) for t in tarVoc)))
-            values = random.sample(range(1,10000), tarV)
-            totalValue = sum(values)
-            tarCounter.append(Counter(dict((tarVoc[t],values[t]/totalValue) for t in range(tarV))))
-        stTable = dict(zip(srcVoc,tarCounter))
+        '''
+        stTable = {}
+        tarCounters = []
+        ones = np.ones(tarV)
+        for i, s in enumerate(range(srcV)):
+            if i%10 is 0:
+                print '\t\ti:', i
+            #tarCounters.append(Counter(dict(zip(tarVoc,np.random.dirichlet(ones,size=1)[0]))))
+            stTable[s] = Counter(dict(zip(tarVoc,np.random.dirichlet(ones,size=1)[0])))
+        #stTable = dict(zip(srcVoc, tarCounters))
+        '''
+        #stTable = dict(zip(srcVoc, 
+        #    [Counter(dict(zip(tarVoc,np.random.dirichlet(np.ones(tarV),size=1)[0]))) for s in range(srcV)]))
         
+        stTable = {}
+        tOnes = np.ones(tarV)
+        for s in xrange(srcV):
+            if s%10 is 0:
+                print '\t\t'+str(s)
+            values = np.random.dirichlet(tOnes,size=1)[0]
+            #stTable[srcVoc[s]] = Counter(dict(zip(tarVoc,values)))
+            stTable[srcVoc[s]] = Counter(dict((tarVoc[t],values[t]) for t in xrange(tarV)))
+        stCache = Cache.Cache('stTable.random.full_run.v1', stTable)
+        stCache.save()
+
     print '\tstTable created ...'
     print '\t\tDuration:', getDuration(start, time.time())
     return stTable
 
 def initAligns(sentences):
+    print '\t\tInitializing alignment probabilities...'
+    start = time.time()
     alignCj = {}
     alignC = {}
     for srcSen, tarSen in sentences:
         l = len(tarSen)
         m = len(srcSen)
-        for j in range(m):
-            alignC[(j+1, l, m)] = 0
-            for aj in range(l):
+        for j in xrange(m):
+            alignC[(j+1,l,m)] = 0
+            for aj in xrange(l):
                 alignCj[(aj+1,j+1,l,m)] = 0
+    print '\t\t\tDuration:', getDuration(start, time.time())
     return alignCj, alignC
         
 def estimateEpsilon(sentences):
@@ -291,7 +312,7 @@ def estimateEpsilon(sentences):
     for k in pl:
         acc += 1.0/sum(pl[k])
     epsilon = acc/len(pl)
-    print epsilon
+    #print epsilon
     return epsilon
 
 def emTraining(sentences, sTest):
@@ -302,9 +323,9 @@ def emTraining(sentences, sTest):
 
     if model is 2:
         alignCj, alignC = initAligns(sentences)
-        #unifAlignP = 1.0/len(alignCj) 
+        unifAlignP = 1.0/len(alignCj) 
         #alignProbs = {align:unifAlignP for align in alignCj}
-        alignProbs = dict(zip(alignCj, [1.0/len(alignCj)]*len(alignCj)))
+        alignProbs = dict(zip(alignCj, [unifAlignP]*len(alignCj)))
     else:
         alignProbs = None
 
