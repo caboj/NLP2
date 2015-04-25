@@ -235,9 +235,12 @@ def translationTable(counts):
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
             if not alpha is None:
-                stTable[sWord][tWord] = nullN * math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
+                stProb =  math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
             else:
-                stTable[sWord][tWord] = nullN * (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+                stProb = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+            if tWord == 'NULL':
+                stProb *= nullN
+            stTable[sWord][tWord] = stProb
     print '\t\tDuration: ' + getDuration(start, time.time())
     return stTable
 
