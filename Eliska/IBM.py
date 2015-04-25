@@ -279,56 +279,10 @@ def initStTable(sentences):
         stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
 
     if stInit == 'heuristic':
-        stCounts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
-        sTotals = {s:0.0 for s in srcVoc}
-        tTotals = {t:0.0 for t in tarVoc if t != 'NULL'}
-        sFreq = {s:0.0 for s in srcVoc}
-        tFreq = {t:0.0 for t in tarVoc}
-        # Count number of sentences any s or t appear in and total appearances of each word.
-        for (src, tar) in sentences:
-            seen = {}
-            for t in tar[1:]:                            
-                tFreq[t] += 1
-                if t not in seen:
-                    tTotals[t] += 1
-                    seen[t] = True
-            seen = {}
-            for s in src:
-                sFreq[s] += 1
-                tSeen = {}
-                if s not in seen:
-                    sTotals[s] += 1
-                    seen[s] = True
-                for t in tar[1:]:
-                    if t not in t_seen:
-                        stCounts[s][t] += 1
-                        tSeen[t] = True
-        stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
-        # Calculate LLR
-        for s in srcVoc:
-            for t in t_totals.keys():
-                stCount = stCounts[s][t]
-                
-                if stCount / len(sentences) > (sTotals[s] * tTotals[t]) / (len(sentences)**2):                    
-                    stTable[s][t] =  st_count * math.log((stCount / sTotals[s]) / (tTotals[t] / len(sentences))) # s and t
-                    try:
-                        stTable[s][t] += (sTotals[s] - stCount) * math.log(((sTotals[s] - stCount) / sTotals[s]) / ((len(sentences)- tTotals[t]) /len(sentences))) # s and not t
-                    except ValueError:
-                        continue
-                    try: 
-                        stTable[s][t] += (tTotals[t] - stCount) * math.log(((tTotals[t] - stCount) / (len(sentences) - sTotals[s])) / (tTotals[t] / len(sentences))) # t and not s
-                    except ValueError:
-                        continue
-                    try: 
-                        stTable[s][t] += (len(sentences) - sTotals[s] - tTotals[t] + stCount) * \
-                            math.log(((len(sentences) - sTotals[s] - tTotals[t] + stCount) / (len(sentences) - sTotals[s])) / ((len(sentences)- tTotals[t])/len(sentences)))# not s and not t
-                    except ValueError:
-                        continue
-                else: #Negative correlation
-                    stTable[s][t] = 0.0
+        stTable, sTotals = _getLLR(sentences)
         #Find max marginal value for s for normalization
         maxVal = 0.0
-        for cond_t in stTable.values():
+        for condT in stTable.values():
             if sum(condT.values()) > maxVal:
                 maxVal = sum(condT.values())
         
@@ -421,6 +375,61 @@ def emTraining(sentences, sTest):
     
 def getDuration(start, stop):
     return str(datetime.timedelta(seconds=(stop-start)))
+
+def _getLLR(sentences):
+    stCounts, sTotals, tTotals, sFreq, tFreq = _getCounts(sentences)
+    
+    stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+    # Calculate LLR
+    for s in srcVoc:
+        for t in tTotals.keys():
+            stCount = stCounts[s][t]
+            
+            if stCount / len(sentences) > (sTotals[s] * tTotals[t]) / (len(sentences)**2):                    
+                stTable[s][t] =  stCount * math.log((stCount / sTotals[s]) / (tTotals[t] / len(sentences))) # s and t
+                try:
+                    stTable[s][t] += (sTotals[s] - stCount) * math.log(((sTotals[s] - stCount) / sTotals[s]) / ((len(sentences)- tTotals[t]) /len(sentences))) # s and not t
+                except ValueError:
+                    continue
+                try: 
+                    stTable[s][t] += (tTotals[t] - stCount) * math.log(((tTotals[t] - stCount) / (len(sentences) - sTotals[s])) / (tTotals[t] / len(sentences))) # t and not s
+                except ValueError:
+                    continue
+                try: 
+                    stTable[s][t] += (len(sentences) - sTotals[s] - tTotals[t] + stCount) * \
+                        math.log(((len(sentences) - sTotals[s] - tTotals[t] + stCount) / (len(sentences) - sTotals[s])) / ((len(sentences)- tTotals[t])/len(sentences)))# not s and not t
+                except ValueError:
+                    continue
+            else: #Negative correlation
+                stTable[s][t] = 0.0
+    return stTable, sTotals
+
+def _getCounts(sentences):
+    stCounts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+    sTotals = {s:0.0 for s in srcVoc}
+    tTotals = {t:0.0 for t in tarVoc if t != 'NULL'}
+    sFreq = {s:0.0 for s in srcVoc}
+    tFreq = {t:0.0 for t in tarVoc}
+    # Count number of sentences any s or t appear in and total appearances of each word.
+    for (src, tar) in sentences:
+        seen = {}
+        for t in tar[1:]:                            
+            tFreq[t] += 1
+            if t not in seen:
+                tTotals[t] += 1
+                seen[t] = True
+        seen = {}
+        for s in src:
+            sFreq[s] += 1
+            tSeen = {}
+            if s not in seen:
+                sTotals[s] += 1
+                seen[s] = True
+            for t in tar[1:]:
+                if t not in tSeen:
+                    stCounts[s][t] += 1
+                    tSeen[t] = True
+    return stCounts, sTotals, tTotals, sFreq, tFreq
 
 if __name__ == '__main__':
     main()
