@@ -316,19 +316,30 @@ def initAligns(sentences):
     print '\t\t\tDuration:', getDuration(start, time.time())
     return alignCj, alignC
         
+
 def estimateEpsilon(sentences):
     # estimate fixed epsilon
     pl = defaultdict(Counter)
     for srcSen, tarSen in sentences:
-        pl[len(srcSen)][len(tarSen)]+=1
-       
-    acc = 0
-    for k in pl:
-        acc += sum(pl[k])
-    
-    epsilon = 1.0/acc
+        pl[len(srcSen)][len(tarSen)]=1
+    pl = {s:len(pl[s]) for s in pl}
+
+    epsilon = (float)(sum(pl))/len(sentences)
     print '\tepsilon: ',epsilon
     return epsilon
+
+
+
+# estimate fixed epsilon
+
+    pl = defaultdict(Counter)
+
+    for srcSen, tarSen in sentences:
+
+        pl[len(srcSen)][len(tarSen)]=1
+
+    pl = {s:len(pl[s]) for s in pl}
+
 
 def emTraining(sentences, sTest):
     print 'Beginning EM training...'
