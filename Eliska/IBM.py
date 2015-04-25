@@ -158,16 +158,19 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
         m = len(srcSen)
         senLL = 0
         for j in xrange(m):
+            alignLL = 1
             for aj in xrange(l):
                 if model is 1:
                     senLL += stTable[srcSen[j]][tarSen[aj]]
                 else:
-                    senLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
+                    alignLL *= stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
+            senLL += alignLL
         if model is 1:
             ll += math.log(epsilon) - m*math.log(l+1) + math.log(senLL)
         else:
-            ll += math.log(epsilon) + math.log(senLL)
-    print '\t\t\tLog likelihood:', str(ll) 
+            if senLL != 0.0:
+                ll += math.log(epsilon) + math.log(senLL)
+    print '\t\t\tLog likelihood:', str(math.pow(math.e,ll)) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
 
@@ -342,7 +345,7 @@ def initStTable(sentences):
     return stTable
 
 def initAligns(sentences):
-    print '\t\tInitializing alignment probabilities...'
+    print '\tinitializing alignment counts (setting to zero)...'
     start = time.time()
     alignCj = {}
     alignC = {}
@@ -361,13 +364,13 @@ def estimateEpsilon(sentences):
     pl = defaultdict(Counter)
     for srcSen, tarSen in sentences:
         pl[len(srcSen)][len(tarSen)]+=1
-    """   
+       
     acc = 0
     for k in pl:
         acc += sum(pl[k])
-    """
-    epsilon = 1.0/len(pl)
-    print epsilon
+    
+    epsilon = 1.0/acc
+    print '\tepsilon: ',epsilon
     return epsilon
 
 def emTraining(sentences, sTest):
