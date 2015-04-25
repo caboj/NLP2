@@ -158,19 +158,20 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
         m = len(srcSen)
         senLL = 0
         for j in xrange(m):
-            alignLL = 1
+            alignLL = 0
             for aj in xrange(l):
                 if model is 1:
-                    senLL += stTable[srcSen[j]][tarSen[aj]]
+                    alignLL += stTable[srcSen[j]][tarSen[aj]]
                 else:
-                    alignLL *= stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
-            senLL += alignLL
+                    alignLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
+            if model is 2:
+                senLL += math.log(alignLL)
         if model is 1:
-            ll += math.log(epsilon) - m*math.log(l+1) + math.log(senLL)
+            ll += math.log(epsilon) - m*math.log(l+1) + senLL
         else:
             if senLL != 0.0:
-                ll += math.log(epsilon) + math.log(senLL)
-    print '\t\t\tLog likelihood:', str(math.pow(math.e,ll)) 
+                ll += math.log(epsilon) +senLL
+    print '\t\t\tLog likelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
 
@@ -327,18 +328,6 @@ def estimateEpsilon(sentences):
     epsilon = (float)(sum(pl))/len(sentences)
     print '\tepsilon: ',epsilon
     return epsilon
-
-
-
-# estimate fixed epsilon
-
-    pl = defaultdict(Counter)
-
-    for srcSen, tarSen in sentences:
-
-        pl[len(srcSen)][len(tarSen)]=1
-
-    pl = {s:len(pl[s]) for s in pl}
 
 
 def emTraining(sentences, sTest):
