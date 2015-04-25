@@ -19,16 +19,26 @@ def main():
         help='Smoothing parameters n and |V|. If |V| is 0 it is determined by the vocabulary present in the data')
     parser.add_argument('-a', '--alpha', default=None, type=float, required=False, 
         help='Alpha parameter for Variational Bayes.')
-    parser.add_argument('-nulls', '--nullWords', default=1, type=int, required=False, 
+    parser.add_argument('-nw', '--nullWords', default=1, type=int, required=False, 
         help='Number of null words added to target sentence')
+    parser.add_argument('-e', '--eval', default=None, nargs=2, type=str, required=False, 
+        help='Generate output required by assignment')
+    
     args = vars(parser.parse_args())
 
-    #'none', 'smoothing', 'null-plus', 'heuristic', 'uniform', 'random', 'model1'
+    print args['eval']
 
     global model
     model = args['model']
     global test
     test = args['test']
+    
+    global evaluate
+    if not args['eval']:
+        evaluate = False
+    else:
+        evaluate = True
+
 
     global stInit
     if model is 1 and args['stInit'] == 'model1':
@@ -37,25 +47,32 @@ def main():
     else:
         stInit = args['stInit']
 
-    global nullN
-    nullN = args['nullWords']
-
     global runType
-    if args['test']:
-        runType = 'test'
-        sFileTrain = 'test.e'
-        tFileTrain = 'test.f'
+    if evaluate:
+        runType = 'evaluate'
+        sFileTrain = args['eval'][0]
+        tFileTrain = args['eval'][1]
     else:
-        runType = '10000'
-        sFileTrain = 'hansards.36.2.e.10000'
-        tFileTrain = 'hansards.36.2.f.10000'
+        if args['test']:
+            runType = 'test'
+            sFileTrain = 'test.e'
+            tFileTrain = 'test.f'
+        else:
+            runType = '10000'
+            sFileTrain = 'hansards.36.2.e.10000'
+            tFileTrain = 'hansards.36.2.f.10000'
 
-    sFileTest = 'test.e'
-    tFileTest = 'test.f'
+        sFileTest = 'test.e'
+        tFileTest = 'test.f'
 
     print "Retrieving sentences and vocabularies..."
-    sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
-    sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
+    if not evaluate:
+        sTest = getSentences('Data/'+sFileTest, 'Data/'+tFileTest)
+        sTrain = getSentences('Data/'+sFileTrain, 'Data/'+tFileTrain)
+    else:
+        sTest = []
+        sTrain = getSentences(sFileTrain, tFileTrain)
+    
     sentences = sTrain + sTest
 
     print '\tSentences:', str(len(sentences))
@@ -66,7 +83,12 @@ def main():
     # vocabularies only differ between test runs and full runs
     runType += '.model'+str(args['model'])+'.'+args['stInit']
     if args['stInit'] == 'random':
-        runType += '1'
+        runType += '4'
+
+    global nullN
+    nullN = (float)(args['nullWords'])
+    if nullN > 1:
+        runType += '.null'
 
     # store training vocabulary lengths
     global srcV
@@ -78,7 +100,7 @@ def main():
 
     global smooth
     if not args['smooth']:
-        smooth = {'n':0, 'v':tarV}
+        smooth = {'n':0, 'v':tarV*1.05}
     else:
         smooth = {'n':args['smooth'][0], 'v':args['smooth'][1]}
         runType += '.n'+str(smooth['n'])+'.v'+str(smooth['v'])
@@ -120,8 +142,9 @@ def getVocabularies(sentences, sFile, tFile):
             for t in tSnt:
                 if not t in tarVoc.cache:
                     tarVoc.cache.append(t)
-        srcVoc.save()
-        tarVoc.save()
+        if not evaluate:
+            srcVoc.save()
+            tarVoc.save()
     print 'Vocabularies obtained in', getDuration(start, time.time())
     return srcVoc.cache, tarVoc.cache
 
@@ -158,19 +181,19 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
         m = len(srcSen)
         senLL = 0
         for j in xrange(m):
-            alignLL = 1
+            ajLL = 0
             for aj in xrange(l):
                 if model is 1:
                     senLL += stTable[srcSen[j]][tarSen[aj]]
                 else:
-                    alignLL *= stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
-            senLL += alignLL
+                    ajLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
+            if model is 2:
+                senLL += math.log(ajLL)
         if model is 1:
-            ll += math.log(epsilon) - m*math.log(l+1) + math.log(senLL)
+            ll += math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + math.log(senLL)
         else:
-            if senLL != 0.0:
-                ll += math.log(epsilon) + math.log(senLL)
-    print '\t\t\tLog likelihood:', str(math.pow(math.e,ll)) 
+            ll += math.log(epsilon) + senLL
+    print '\t\t\tLog likelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
 
@@ -235,9 +258,10 @@ def translationTable(counts):
         sTotals[sWord] = sum(counter.values())
         for tWord, score in counter.iteritems():
             if not alpha is None:
-                stProb =  math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
+                stProb = math.pow(math.e,digamma(score+alpha))/math.pow(math.e,digamma(sTotals[sWord]+alpha))
             else:
                 stProb = (score+smooth['n'])/(sTotals[sWord]+smooth['n']*smooth['v'])
+            
             if tWord == 'NULL':
                 stProb *= nullN
             stTable[sWord][tWord] = stProb
@@ -261,7 +285,7 @@ def initStTable(sentences):
         if test:
             cache = 'stTable.test.model1.uniform.iter14'
         else:
-            cache = 'stTable.10000.model1.uniform.iter14'
+            cache = 'stTable.10000.model1.uniform.iter59'
         stCache = Cache.Cache(cache, [], True)
         if not stCache.cache:
             print 'Initialization cache', cache, 'unavailable. Defaulting to uniform.'
@@ -289,13 +313,17 @@ def initStTable(sentences):
         # Normalize
         for condT in stTable.values():
             for t in condT.keys():
-                condT[t] = condT[t] / maxVal
+                condT[t] = condT[t]/maxVal
 
         sTotalSum = sum([len(srcSen) for (srcSen, tarSen) in sentences])
 
         for s in stTable.keys():
-            stTable[s]['NULL'] = nullN * (sTotals[s] / sTotalSum)
+            stTable[s]['NULL'] = sTotals[s]/sTotalSum
             stTable[s] = Counter(stTable[s])
+
+    if nullN > 1:
+        for s in stTable.keys():
+            stTable[s]['NULL'] *= nullN
 
     print '\tstTable created ...'
     print '\t\tDuration:', getDuration(start, time.time())
@@ -320,14 +348,10 @@ def estimateEpsilon(sentences):
     # estimate fixed epsilon
     pl = defaultdict(Counter)
     for srcSen, tarSen in sentences:
-        pl[len(srcSen)][len(tarSen)]+=1
-       
-    acc = 0
-    for k in pl:
-        acc += sum(pl[k])
-    
-    epsilon = 1.0/acc
-    print '\tepsilon: ',epsilon
+        pl[len(srcSen)][len(tarSen)]=1
+    pl = {s:len(pl[s]) for s in pl}
+
+    epsilon = (float)(sum(pl))/len(sentences)
     return epsilon
 
 def emTraining(sentences, sTest):
@@ -361,16 +385,20 @@ def emTraining(sentences, sTest):
                 alignProbs = alignments(alignCj, alignC)
             stCache.cache = stTable
             if i is 0 or (i+1)%5 is 0:
-                stCache.save()
+                if not evaluate:
+                    stCache.save()
         #else:
         #    stTable = stCache.cache
         viterbiFile = 'Output/'+runType+'.viterbi.iter'+str(i)
         outputViterbi(sTest, stTable, viterbiFile, alignProbs)
         likelihood = logLikelihood(sentences, stTable, epsilon, alignProbs)
         likelihoodCache.cache.append(likelihood)
-        likelihoodCache.save()
+        if not evaluate:
+            likelihoodCache.save()
         i+=1
 
+    if evaluate:
+        outputViterbi(sentences, stTable, 'alignments.out', alignProbs)
     print "EMtraining finished after", iterations, "iterations in", getDuration(globalStart,time.time()),"."
     
 def getDuration(start, stop):
@@ -378,30 +406,37 @@ def getDuration(start, stop):
 
 def _getLLR(sentences):
     stCounts, sTotals, tTotals, sFreq, tFreq = _getCounts(sentences)
-    
+    smoothN = smooth['n'] if smooth['n'] > 0 else 1
+    smoothV = smooth['v']
+
     stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
     # Calculate LLR
+    sensLen = len(sentences)
     for s in srcVoc:
         for t in tTotals.keys():
             stCount = stCounts[s][t]
             
-            if stCount / len(sentences) > (sTotals[s] * tTotals[t]) / (len(sentences)**2):                    
-                stTable[s][t] =  stCount * math.log((stCount / sTotals[s]) / (tTotals[t] / len(sentences))) # s and t
+            if stCount / sensLen > (sTotals[s] * tTotals[t]) / (sensLen**2):                  
+                # s and t  
+                stTable[s][t] =  stCount * math.log((stCount / sTotals[s]) / (tTotals[t] / sensLen)) 
                 try:
-                    stTable[s][t] += (sTotals[s] - stCount) * math.log(((sTotals[s] - stCount) / sTotals[s]) / ((len(sentences)- tTotals[t]) /len(sentences))) # s and not t
+                    # s and not t              
+                    stTable[s][t] += (sTotals[s] - stCount) * math.log(((sTotals[s] - stCount) / sTotals[s]) / ((sensLen - tTotals[t]) /sensLen)) 
                 except ValueError:
                     continue
                 try: 
-                    stTable[s][t] += (tTotals[t] - stCount) * math.log(((tTotals[t] - stCount) / (len(sentences) - sTotals[s])) / (tTotals[t] / len(sentences))) # t and not s
+                    # t and not s
+                    stTable[s][t] += (tTotals[t] - stCount) * math.log(((tTotals[t] - stCount) / (sensLen - sTotals[s])) / (tTotals[t] / sensLen)) 
                 except ValueError:
                     continue
                 try: 
-                    stTable[s][t] += (len(sentences) - sTotals[s] - tTotals[t] + stCount) * \
-                        math.log(((len(sentences) - sTotals[s] - tTotals[t] + stCount) / (len(sentences) - sTotals[s])) / ((len(sentences)- tTotals[t])/len(sentences)))# not s and not t
+                    # not s and not t
+                    stTable[s][t] += (sensLen - sTotals[s] - tTotals[t] + stCount) * \
+                        math.log(((sensLen - sTotals[s] - tTotals[t] + stCount) / (sensLen - sTotals[s])) / ((sensLen- tTotals[t])/sensLen))
                 except ValueError:
                     continue
             else: #Negative correlation
-                stTable[s][t] = 0.0
+                stTable[s][t] = smoothN/(smoothN*smoothV)
     return stTable, sTotals
 
 def _getCounts(sentences):
