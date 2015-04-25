@@ -65,7 +65,7 @@ def main():
 
     # vocabularies only differ between test runs and full runs
     runType += '.model'+str(args['model'])+'.'+args['stInit']
-    if args['stInit'] is 'random':
+    if args['stInit'] == 'random':
         runType += '1'
 
     # store training vocabulary lengths
@@ -164,7 +164,7 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
                 else:
                     senLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
         if model is 1:
-            ll += math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + math.log(senLL)
+            ll += math.log(epsilon) - m*math.log(l+1) + math.log(senLL)
         else:
             ll += math.log(epsilon) + math.log(senLL)
     print '\t\t\tLog likelihood:', str(ll) 
@@ -241,10 +241,6 @@ def translationTable(counts):
 def alignments(alignCj, alignC):
     start = time.time()
     print "\tRecomputing alignments ..."
-    #alignProbs = {}
-
-    #for (aj,j,l,m) in alignCj:
-    #    alignProbs[(aj,j,l,m)] = alignCj[(aj,j,l,m)]/alignC[(j,l,m)]
     alignProbs = {(aj,j,l,m):alignCj[(aj,j,l,m)]/alignC[(j,l,m)] for (aj,j,l,m) in alignCj}
     print '\t\tDuration: ' + getDuration(start, time.time())
     return alignProbs
@@ -277,49 +273,49 @@ def initStTable(sentences):
         stTable = dict(zip(srcVoc,[tarCounter for s in srcVoc]))
 
     if stInit == 'heuristic':
-        st_counts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
-        s_totals = {s:0.0 for s in srcVoc}
-        t_totals = {t:0.0 for t in tarVoc if t != 'NULL'}
-        s_freq = {s:0.0 for s in srcVoc}
-        t_freq = {t:0.0 for t in tarVoc}
+        stCounts = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
+        sTotals = {s:0.0 for s in srcVoc}
+        tTotals = {t:0.0 for t in tarVoc if t != 'NULL'}
+        sFreq = {s:0.0 for s in srcVoc}
+        tFreq = {t:0.0 for t in tarVoc}
         # Count number of sentences any s or t appear in and total appearances of each word.
         for (src, tar) in sentences:
             seen = {}
             for t in tar[1:]:                            
-                t_freq[t] += 1
+                tFreq[t] += 1
                 if t not in seen:
-                    t_totals[t] += 1
+                    tTotals[t] += 1
                     seen[t] = True
             seen = {}
             for s in src:
-                s_freq[s] += 1
-                t_seen = {}
+                sFreq[s] += 1
+                tSeen = {}
                 if s not in seen:
-                    s_totals[s] += 1
+                    sTotals[s] += 1
                     seen[s] = True
                 for t in tar[1:]:
                     if t not in t_seen:
-                        st_counts[s][t] += 1
-                        t_seen[t] = True
+                        stCounts[s][t] += 1
+                        tSeen[t] = True
         stTable = {s:{t:0.0 for t in tarVoc if t != 'NULL'} for s in srcVoc}
         # Calculate LLR
         for s in srcVoc:
             for t in t_totals.keys():
-                st_count = st_counts[s][t]
+                stCount = stCounts[s][t]
                 
-                if st_count / len(sentences) > (s_totals[s] * t_totals[t]) / (len(sentences)**2):                    
-                    stTable[s][t] =  st_count * math.log((st_count / s_totals[s]) / (t_totals[t] / len(sentences))) # s and t
+                if stCount / len(sentences) > (sTotals[s] * tTotals[t]) / (len(sentences)**2):                    
+                    stTable[s][t] =  st_count * math.log((stCount / sTotals[s]) / (tTotals[t] / len(sentences))) # s and t
                     try:
-                        stTable[s][t] += (s_totals[s] - st_count) * math.log(((s_totals[s] - st_count) / s_totals[s]) / ((len(sentences)- t_totals[t]) /len(sentences))) # s and not t
+                        stTable[s][t] += (sTotals[s] - stCount) * math.log(((sTotals[s] - stCount) / sTotals[s]) / ((len(sentences)- tTotals[t]) /len(sentences))) # s and not t
                     except ValueError:
                         continue
                     try: 
-                        stTable[s][t] += (t_totals[t] - st_count) * math.log(((t_totals[t] - st_count) / (len(sentences) - s_totals[s])) / (t_totals[t] / len(sentences))) # t and not s
+                        stTable[s][t] += (tTotals[t] - stCount) * math.log(((tTotals[t] - stCount) / (len(sentences) - sTotals[s])) / (tTotals[t] / len(sentences))) # t and not s
                     except ValueError:
                         continue
                     try: 
-                        stTable[s][t] += (len(sentences) - s_totals[s] - t_totals[t] + st_count) * \
-                            math.log(((len(sentences) - s_totals[s] - t_totals[t] + st_count) / (len(sentences) - s_totals[s])) / ((len(sentences)- t_totals[t])/len(sentences)))# not s and not t
+                        stTable[s][t] += (len(sentences) - sTotals[s] - tTotals[t] + stCount) * \
+                            math.log(((len(sentences) - sTotals[s] - tTotals[t] + stCount) / (len(sentences) - sTotals[s])) / ((len(sentences)- tTotals[t])/len(sentences)))# not s and not t
                     except ValueError:
                         continue
                 else: #Negative correlation
@@ -327,18 +323,18 @@ def initStTable(sentences):
         #Find max marginal value for s for normalization
         maxVal = 0.0
         for cond_t in stTable.values():
-            if sum(cond_t.values()) > maxVal:
-                maxVal = sum(cond_t.values())
+            if sum(condT.values()) > maxVal:
+                maxVal = sum(condT.values())
         
         # Normalize
-        for cond_t in stTable.values():
-            for t in cond_t.keys():
-                cond_t[t] = cond_t[t] / maxVal
+        for condT in stTable.values():
+            for t in condT.keys():
+                condT[t] = condT[t] / maxVal
 
-        s_total_sum = sum([len(src_sent) for (src_sent,tar_sent) in sentences])
+        sTotalSum = sum([len(srcSen) for (srcSen, tarSen) in sentences])
 
         for s in stTable.keys():
-            stTable[s]['NULL'] = null_n * (s_totals[s] / s_total_sum)
+            stTable[s]['NULL'] = nullN * (sTotals[s] / sTotalSum)
             stTable[s] = Counter(stTable[s])
 
     print '\tstTable created ...'
