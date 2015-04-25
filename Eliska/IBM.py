@@ -161,16 +161,14 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
             alignLL = 0
             for aj in xrange(l):
                 if model is 1:
-                    alignLL += stTable[srcSen[j]][tarSen[aj]]
+                    senLL += stTable[srcSen[j]][tarSen[aj]]
                 else:
-                    alignLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
-            if model is 2:
-                senLL += math.log(alignLL)
+                    senLL += stTable[srcSen[j]][tarSen[aj]]*alignProbs[(aj+1,j+1,l,m)]
         if model is 1:
-            ll += math.log(epsilon) - m*math.log(l+1) + senLL
+            ll += math.log(epsilon) - m*math.log(l+1) + math.log(senLL)
         else:
-            if senLL != 0.0:
-                ll += math.log(epsilon) +senLL
+            #if senLL != 0.0:
+            ll += math.log(epsilon) +math.log(senLL)
     print '\t\t\tLog likelihood:', str(ll) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
