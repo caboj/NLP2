@@ -168,7 +168,8 @@ def logLikelihood(sentences, stTable, epsilon, alignProbs=None):
         if model is 1:
             ll += math.log(epsilon) - len(srcSen)*math.log(len(tarSen)+1) + math.log(senLL)
         else:
-            ll += epsilon * senLL#math.pow(math.e,senLL)
+            if senLL != 0.0:
+                ll += math.log(epsilon) + math.log(senLL)
     print '\t\t\tLog likelihood:', str(math.pow(math.e,ll)) 
     print '\t\tDuration:', getDuration(start, time.time())
     return ll
